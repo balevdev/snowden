@@ -1,0 +1,36 @@
+version: "3.9"
+
+services:
+  timescaledb:
+    image: timescale/timescaledb:latest-pg18
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: snowden
+      POSTGRES_PASSWORD: snowden_dev
+      POSTGRES_DB: snowden
+    volumes:
+      - tsdb_data:/var/lib/postgresql/data
+      - ./infra/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - ./infra/continuous_aggs.sql:/docker-entrypoint-initdb.d/02-aggs.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U snowden"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: snowden_dev
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infra/grafana/datasource.yml:/etc/grafana/provisioning/datasources/ds.yml
+    depends_on:
+      - timescaledb
+
+volumes:
+  tsdb_data:
+  grafana_data:

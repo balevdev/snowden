@@ -1,0 +1,31 @@
+{
+  "name": "snowden",
+  "description": "Autonomous prediction market trading system",
+  "heartbeat_interval": 900,
+  "skills": [
+    {
+      "name": "snowden_chief",
+      "path": "snowden/skills/chief/SKILL.md",
+      "trigger": "heartbeat"
+    },
+    {
+      "name": "snowden_analyst",
+      "path": "snowden/skills/analyst/SKILL.md",
+      "trigger": "dispatch"
+    },
+    {
+      "name": "snowden_trader",
+      "path": "snowden/skills/trader/SKILL.md",
+      "trigger": "dispatch"
+    },
+    {
+      "name": "snowden_sentinel",
+      "path": "snowden/skills/sentinel/SKILL.md",
+      "trigger": "dispatch"
+    }
+  ],
+  "discord": {
+    "enabled": true,
+    "commands": ["!status", "!positions", "!pause", "!resume", "!force-scan", "!calibration", "!kill"]
+  }
+}

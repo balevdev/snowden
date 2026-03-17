@@ -1,0 +1,1705 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Snowden: Project Deep-Dive</title>
+<meta name="description" content="A technical deep-dive into Snowden, an autonomous prediction market trading system for Polymarket.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Source+Serif+4:ital,opsz,wght@0,8..60,300..900;1,8..60,300..900&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ════════════════════════════════════════════════════════════════
+   THEME TOKENS
+   ════════════════════════════════════════════════════════════════ */
+:root {
+  /* Light palette */
+  --bg:            #faf8f4;
+  --bg-warm:       #f3ede3;
+  --surface:       #ffffff;
+  --text:          #1c1c2b;
+  --text-2:        #55556a;
+  --text-3:        #8e8e9e;
+  --accent:        #b8862e;
+  --accent-hover:  #9e7226;
+  --accent-bg:     rgba(184,134,46,.07);
+  --accent-border: rgba(184,134,46,.22);
+  --border:        #e5e0d6;
+  --code-bg:       #282834;
+  --code-text:     #ddd9d0;
+  --callout-bg:    #faf3e6;
+  --callout-border:#b8862e;
+  --nav-bg:        rgba(250,248,244,.94);
+  --table-head:    #f3ede3;
+  --table-border:  #e5e0d6;
+  --diagram-bg:    #f3ede3;
+  --shadow-s:      0 1px 4px rgba(0,0,0,.04);
+  --shadow-m:      0 4px 16px rgba(0,0,0,.06);
+  --shadow-l:      0 8px 32px rgba(0,0,0,.08);
+  --hero-top:      #ede7db;
+  --hero-bot:      #faf8f4;
+  --glow:          rgba(184,134,46,.15);
+  /* Syntax */
+  --syn-kw:   #b8862e;
+  --syn-str:  #6d9e78;
+  --syn-cmt:  #6e6e82;
+  --syn-num:  #c9a24e;
+  --syn-fn:   #7b96b8;
+  --syn-tp:   #b47f96;
+  --syn-dec:  #a48cc4;
+  /* Layout */
+  --sidebar-w: 260px;
+  --nav-h:     60px;
+  --content-w: 720px;
+  --font-d: 'DM Serif Display', Georgia, serif;
+  --font-b: 'Source Serif 4', Georgia, serif;
+  --font-s: 'IBM Plex Sans', -apple-system, sans-serif;
+  --font-m: 'JetBrains Mono', 'Fira Code', monospace;
+  --radius: 12px;
+  --ease: cubic-bezier(.22,1,.36,1);
+}
+
+[data-theme="dark"] {
+  --bg:            #0c0c12;
+  --bg-warm:       #14141c;
+  --surface:       #1a1a26;
+  --text:          #e8e4dc;
+  --text-2:        #a0a0b4;
+  --text-3:        #626278;
+  --accent:        #d4a44a;
+  --accent-hover:  #e0b860;
+  --accent-bg:     rgba(212,164,74,.08);
+  --accent-border: rgba(212,164,74,.24);
+  --border:        #24243a;
+  --code-bg:       #0a0a14;
+  --code-text:     #ccc8c0;
+  --callout-bg:    rgba(212,164,74,.06);
+  --callout-border:#d4a44a;
+  --nav-bg:        rgba(12,12,18,.92);
+  --table-head:    #1a1a26;
+  --table-border:  #24243a;
+  --diagram-bg:    #14141c;
+  --shadow-s:      0 1px 4px rgba(0,0,0,.3);
+  --shadow-m:      0 4px 16px rgba(0,0,0,.4);
+  --shadow-l:      0 8px 32px rgba(0,0,0,.5);
+  --hero-top:      #14141c;
+  --hero-bot:      #0c0c12;
+  --glow:          rgba(212,164,74,.12);
+  --syn-kw:   #d4a44a;
+  --syn-str:  #7caa88;
+  --syn-cmt:  #5e5e72;
+  --syn-num:  #d4b060;
+  --syn-fn:   #8eaac8;
+  --syn-tp:   #c08ea0;
+  --syn-dec:  #b09ad4;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   RESET & BASE
+   ════════════════════════════════════════════════════════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{
+  scroll-behavior:smooth;
+  scroll-padding-top:calc(var(--nav-h) + 32px);
+  -webkit-text-size-adjust:100%;
+}
+body{
+  font-family:var(--font-b);font-size:1.08rem;line-height:1.82;
+  color:var(--text);background:var(--bg);
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+  text-rendering:optimizeLegibility;
+  transition:background .4s var(--ease),color .4s var(--ease);
+  overflow-x:hidden;
+}
+::selection{background:var(--accent);color:#fff}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px}
+a{color:inherit;text-decoration:none;transition:color .2s}
+img{max-width:100%;display:block}
+
+/* ════════════════════════════════════════════════════════════════
+   SCROLL-DRIVEN REVEAL ANIMATIONS
+   ════════════════════════════════════════════════════════════════ */
+.reveal{
+  opacity:0;
+  transform:translateY(32px);
+  transition:opacity .7s var(--ease), transform .7s var(--ease);
+}
+.reveal.visible{opacity:1;transform:translateY(0)}
+.reveal-delay-1{transition-delay:.1s}
+.reveal-delay-2{transition-delay:.2s}
+.reveal-delay-3{transition-delay:.3s}
+
+/* Stagger children */
+.stagger-children > .reveal:nth-child(1){transition-delay:0s}
+.stagger-children > .reveal:nth-child(2){transition-delay:.08s}
+.stagger-children > .reveal:nth-child(3){transition-delay:.16s}
+.stagger-children > .reveal:nth-child(4){transition-delay:.24s}
+.stagger-children > .reveal:nth-child(5){transition-delay:.32s}
+.stagger-children > .reveal:nth-child(6){transition-delay:.40s}
+.stagger-children > .reveal:nth-child(7){transition-delay:.48s}
+.stagger-children > .reveal:nth-child(8){transition-delay:.56s}
+
+/* ════════════════════════════════════════════════════════════════
+   SCROLL PROGRESS BAR (top of page)
+   ════════════════════════════════════════════════════════════════ */
+.scroll-progress{
+  position:fixed;top:0;left:0;right:0;height:3px;z-index:300;
+  background:transparent;pointer-events:none;
+}
+.scroll-progress-fill{
+  height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--accent-hover));
+  transition:width .15s linear;
+  box-shadow:0 0 8px var(--glow);
+}
+
+/* ════════════════════════════════════════════════════════════════
+   TOP NAV
+   ════════════════════════════════════════════════════════════════ */
+.nav{
+  position:fixed;top:3px;left:0;right:0;height:var(--nav-h);
+  background:var(--nav-bg);backdrop-filter:blur(20px) saturate(1.5);-webkit-backdrop-filter:blur(20px) saturate(1.5);
+  border-bottom:1px solid var(--border);z-index:200;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 28px;
+  transition:background .4s var(--ease),border-color .4s var(--ease),box-shadow .4s var(--ease);
+}
+.nav.scrolled{box-shadow:var(--shadow-m)}
+.nav-logo{
+  font-family:var(--font-s);font-size:1.15rem;font-weight:600;
+  letter-spacing:-.03em;color:var(--text);
+  display:flex;align-items:baseline;flex-shrink:0;gap:2px;
+}
+.nav-logo .accent{
+  color:var(--accent);font-family:var(--font-d);
+  font-style:italic;font-size:1.25rem;
+}
+.nav-mid{display:flex;gap:2px;list-style:none;overflow-x:auto;scrollbar-width:none}
+.nav-mid::-webkit-scrollbar{display:none}
+.nav-mid a{
+  font-family:var(--font-s);font-size:.7rem;font-weight:500;
+  letter-spacing:.08em;text-transform:uppercase;
+  color:var(--text-3);padding:8px 12px;border-radius:8px;
+  white-space:nowrap;transition:color .25s var(--ease),background .25s var(--ease);
+  position:relative;
+}
+.nav-mid a:hover{color:var(--text);background:var(--accent-bg)}
+.nav-mid a.active{color:var(--accent);background:var(--accent-bg);font-weight:600}
+.nav-right{display:flex;align-items:center;gap:10px;flex-shrink:0}
+
+/* Theme toggle */
+.theme-btn{
+  width:40px;height:40px;border-radius:50%;border:1px solid var(--border);
+  background:var(--surface);cursor:pointer;display:flex;align-items:center;
+  justify-content:center;font-size:1.1rem;color:var(--text-2);
+  transition:all .3s var(--ease);
+}
+.theme-btn:hover{border-color:var(--accent);transform:scale(1.1);box-shadow:0 0 16px var(--glow)}
+.theme-btn:active{transform:scale(.92)}
+
+/* Mobile hamburger */
+.hamburger{
+  display:none;width:40px;height:40px;border-radius:8px;border:1px solid var(--border);
+  background:var(--surface);cursor:pointer;flex-direction:column;
+  align-items:center;justify-content:center;gap:5px;
+  transition:border-color .25s;
+}
+.hamburger span{width:18px;height:1.5px;background:var(--text-2);border-radius:1px;transition:all .35s var(--ease)}
+.hamburger.open span:nth-child(1){transform:rotate(45deg) translate(3px,3px)}
+.hamburger.open span:nth-child(2){opacity:0}
+.hamburger.open span:nth-child(3){transform:rotate(-45deg) translate(3px,-3px)}
+
+/* ════════════════════════════════════════════════════════════════
+   SIDEBAR
+   ════════════════════════════════════════════════════════════════ */
+.sidebar{
+  position:fixed;top:calc(var(--nav-h) + 3px);left:0;width:var(--sidebar-w);
+  height:calc(100vh - var(--nav-h) - 3px);background:var(--bg);
+  border-right:1px solid var(--border);padding:36px 22px 28px 28px;
+  overflow-y:auto;z-index:100;display:flex;flex-direction:column;
+  transition:background .4s var(--ease),border-color .4s var(--ease),transform .4s var(--ease);
+}
+.sidebar::-webkit-scrollbar{width:4px}
+.sidebar::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.sidebar-hd{
+  font-family:var(--font-s);font-size:.65rem;font-weight:600;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--text-3);
+  margin-bottom:16px;
+}
+.toc{list-style:none;margin-bottom:auto}
+.toc li{margin-bottom:2px}
+.toc a{
+  display:block;font-family:var(--font-s);font-size:.84rem;font-weight:400;
+  color:var(--text-2);padding:8px 14px;border-left:2px solid transparent;
+  border-radius:0 8px 8px 0;transition:all .25s var(--ease);line-height:1.4;
+}
+.toc a:hover{color:var(--text);background:var(--accent-bg)}
+.toc a.active{color:var(--accent);border-left-color:var(--accent);font-weight:500;background:var(--accent-bg)}
+.sidebar-foot{padding-top:24px}
+.sidebar-foot .sidebar-hd{margin-bottom:10px}
+.prog-text{font-family:var(--font-s);font-size:.82rem;color:var(--text-2)}
+.prog-track{width:100%;height:4px;background:var(--border);border-radius:2px;margin-top:10px;overflow:hidden}
+.prog-fill{height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--accent-hover));border-radius:2px;transition:width .5s var(--ease)}
+
+/* ════════════════════════════════════════════════════════════════
+   MAIN
+   ════════════════════════════════════════════════════════════════ */
+.main{margin-left:var(--sidebar-w);padding-top:calc(var(--nav-h) + 3px);min-height:100vh}
+.wrap{max-width:var(--content-w);margin:0 auto;padding:0 32px 160px}
+
+/* ════════════════════════════════════════════════════════════════
+   HERO
+   ════════════════════════════════════════════════════════════════ */
+.hero{
+  min-height:calc(100vh - var(--nav-h));display:flex;flex-direction:column;
+  align-items:center;justify-content:center;text-align:center;
+  padding:80px 32px 100px;position:relative;
+  background:linear-gradient(180deg,var(--hero-top) 0%,var(--hero-bot) 100%);
+  margin:0 -32px;overflow:hidden;
+}
+.hero::before{
+  content:'';position:absolute;top:50%;left:50%;width:600px;height:600px;
+  transform:translate(-50%,-50%);
+  background:radial-gradient(circle,var(--glow) 0%,transparent 70%);
+  pointer-events:none;opacity:.6;
+}
+.hero::after{
+  content:'';position:absolute;bottom:0;left:50%;transform:translateX(-50%);
+  width:80px;height:3px;background:var(--accent);border-radius:2px;
+}
+.hero h1{
+  font-family:var(--font-d);font-size:clamp(2.8rem,6vw,4.5rem);
+  font-weight:400;line-height:1.1;margin-bottom:28px;
+  position:relative;z-index:1;
+}
+.hero h1 .g{color:var(--accent);font-style:italic}
+.hero .sub{
+  font-family:var(--font-b);font-size:1.12rem;font-weight:300;
+  line-height:1.75;color:var(--text-2);max-width:620px;margin-bottom:40px;
+  position:relative;z-index:1;
+}
+.hero-meta{
+  display:flex;gap:24px;align-items:center;flex-wrap:wrap;justify-content:center;
+  font-family:var(--font-m);font-size:.74rem;color:var(--text-3);letter-spacing:.02em;
+  position:relative;z-index:1;
+}
+.hero-meta span{
+  display:flex;align-items:center;gap:6px;
+  padding:6px 14px;border:1px solid var(--border);border-radius:20px;
+  background:var(--surface);transition:border-color .25s;
+}
+.hero-meta span:hover{border-color:var(--accent)}
+
+/* ════════════════════════════════════════════════════════════════
+   CHAPTER
+   ════════════════════════════════════════════════════════════════ */
+.ch{padding-top:80px;margin-bottom:20px}
+.ch-tag{
+  font-family:var(--font-s);font-size:.7rem;font-weight:600;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--accent);
+  margin-bottom:14px;display:flex;align-items:center;gap:10px;
+}
+.ch-tag::before{content:'';width:24px;height:2px;background:var(--accent);border-radius:1px}
+.ch h2{
+  font-family:var(--font-d);font-size:clamp(1.8rem,3.5vw,2.5rem);
+  font-weight:400;line-height:1.18;margin-bottom:28px;
+}
+.ch h3{
+  font-family:var(--font-d);font-size:1.42rem;font-weight:400;
+  line-height:1.3;margin-top:48px;margin-bottom:16px;
+}
+.ch h4{
+  font-family:var(--font-s);font-size:.84rem;font-weight:600;
+  letter-spacing:.04em;text-transform:uppercase;color:var(--text-2);
+  margin-top:36px;margin-bottom:12px;
+}
+.ch p{margin-bottom:18px}
+.ch ul,.ch ol{padding-left:22px;margin-bottom:18px}
+.ch li{margin-bottom:6px;color:var(--text-2);line-height:1.68}
+.ch li strong{color:var(--text)}
+.ch strong{font-weight:600}
+
+/* Inline code */
+code:not(pre code){
+  font-family:var(--font-m);font-size:.84em;
+  background:var(--accent-bg);border:1px solid var(--accent-border);
+  color:var(--text);padding:2px 6px;border-radius:5px;word-break:break-word;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   CODE BLOCKS
+   ════════════════════════════════════════════════════════════════ */
+.cb{margin:24px 0 28px;border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow-l);border:1px solid var(--border)}
+.cb-head{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:10px 18px;background:var(--surface);border-bottom:1px solid var(--border);
+}
+.cb-file{
+  font-family:var(--font-s);font-size:.68rem;font-weight:500;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--text-3);
+}
+.cb-copy{
+  font-family:var(--font-s);font-size:.72rem;color:var(--text-3);
+  background:none;border:1px solid var(--border);border-radius:6px;
+  padding:3px 12px;cursor:pointer;transition:all .25s var(--ease);line-height:1.6;
+}
+.cb-copy:hover{color:var(--text);border-color:var(--accent);background:var(--accent-bg)}
+.cb-copy.ok{color:var(--accent);border-color:var(--accent)}
+.cb pre{
+  margin:0;padding:20px 22px;background:var(--code-bg);
+  overflow-x:auto;-webkit-overflow-scrolling:touch;
+}
+.cb pre code{
+  font-family:var(--font-m);font-size:.82rem;line-height:1.75;
+  color:var(--code-text);background:none;border:none;padding:0;
+}
+/* Syntax */
+.k{color:var(--syn-kw);font-weight:500}
+.s{color:var(--syn-str)}
+.c{color:var(--syn-cmt);font-style:italic}
+.n{color:var(--syn-num)}
+.f{color:var(--syn-fn)}
+.t{color:var(--syn-tp)}
+.d{color:var(--syn-dec)}
+.p{color:var(--code-text)}
+
+/* ════════════════════════════════════════════════════════════════
+   CALLOUT
+   ════════════════════════════════════════════════════════════════ */
+.callout{
+  margin:28px 0;padding:22px 24px;
+  background:var(--callout-bg);border-left:3px solid var(--callout-border);
+  border-radius:0 var(--radius) var(--radius) 0;
+  transition:background .4s var(--ease),border-color .4s var(--ease);
+}
+.callout-tag{
+  font-family:var(--font-s);font-size:.66rem;font-weight:600;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--accent);
+  margin-bottom:10px;
+}
+.callout p{font-size:.96rem;line-height:1.72;color:var(--text-2);margin-bottom:0}
+.callout p+p{margin-top:12px}
+
+/* ════════════════════════════════════════════════════════════════
+   TABLE
+   ════════════════════════════════════════════════════════════════ */
+.tw{
+  margin:24px 0 28px;overflow-x:auto;-webkit-overflow-scrolling:touch;
+  border-radius:var(--radius);border:1px solid var(--table-border);
+  box-shadow:var(--shadow-s);
+}
+table{width:100%;border-collapse:collapse;font-family:var(--font-s);font-size:.88rem}
+thead{background:var(--table-head)}
+th{
+  font-weight:600;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--text-3);text-align:left;padding:13px 16px;
+  border-bottom:2px solid var(--table-border);
+}
+td{padding:12px 16px;border-bottom:1px solid var(--table-border);color:var(--text-2);line-height:1.55}
+tbody tr:last-child td{border-bottom:none}
+tbody tr{transition:background .2s var(--ease)}
+tbody tr:hover{background:var(--accent-bg)}
+
+/* ════════════════════════════════════════════════════════════════
+   STEPS
+   ════════════════════════════════════════════════════════════════ */
+.steps{margin:24px 0 28px;list-style:none;counter-reset:sc}
+.step{
+  display:flex;gap:18px;align-items:flex-start;margin-bottom:16px;
+  counter-increment:sc;
+  padding:14px 18px;border-radius:var(--radius);
+  transition:background .2s var(--ease);
+}
+.step:hover{background:var(--accent-bg)}
+.step-n{
+  flex-shrink:0;width:32px;height:32px;border-radius:50%;
+  background:var(--accent);color:#fff;font-family:var(--font-s);
+  font-size:.82rem;font-weight:600;display:flex;align-items:center;
+  justify-content:center;margin-top:2px;
+  box-shadow:0 2px 8px var(--glow);
+}
+.step-t{flex:1;font-size:.96rem;line-height:1.65;color:var(--text-2)}
+.step-t strong{color:var(--text)}
+
+/* ════════════════════════════════════════════════════════════════
+   DIAGRAM
+   ════════════════════════════════════════════════════════════════ */
+.diagram{
+  margin:32px 0;padding:32px 24px;background:var(--diagram-bg);
+  border-radius:var(--radius);text-align:center;
+  transition:background .4s var(--ease);
+  border:1px solid var(--border);
+}
+.pipe{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.pipe .nd{
+  background:var(--surface);border:1px solid var(--border);
+  padding:8px 16px;border-radius:8px;font-family:var(--font-m);font-size:.8rem;
+  font-weight:500;color:var(--text);white-space:nowrap;
+  transition:all .3s var(--ease);
+}
+.pipe .nd:hover{transform:translateY(-2px);box-shadow:var(--shadow-m)}
+.pipe .nd.ac{border-color:var(--accent);color:var(--accent);box-shadow:0 0 12px var(--glow)}
+.pipe .ar{color:var(--accent);font-size:1.1rem;font-family:var(--font-m)}
+.db-row{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap}
+.db-row .lbl{font-family:var(--font-s);font-size:.72rem;color:var(--text-3);letter-spacing:.04em}
+
+/* ════════════════════════════════════════════════════════════════
+   FUNNEL
+   ════════════════════════════════════════════════════════════════ */
+.funnel{margin:28px 0}
+.fn-row{display:flex;align-items:center;gap:16px;margin-bottom:6px}
+.fn-bar{
+  height:30px;background:linear-gradient(90deg,var(--accent),var(--accent-hover));border-radius:6px;
+  display:flex;align-items:center;padding:0 12px;
+  font-family:var(--font-s);font-size:.75rem;font-weight:600;color:#fff;white-space:nowrap;
+  box-shadow:0 2px 8px var(--glow);
+}
+.fn-lbl{font-family:var(--font-s);font-size:.82rem;color:var(--text-2);white-space:nowrap;min-width:170px}
+.fn-row:nth-child(1) .fn-bar{width:100%;opacity:1}
+.fn-row:nth-child(2) .fn-bar{width:58%;opacity:.92}
+.fn-row:nth-child(3) .fn-bar{width:38%;opacity:.82}
+.fn-row:nth-child(4) .fn-bar{width:22%;opacity:.72}
+.fn-row:nth-child(5) .fn-bar{width:10%;opacity:.65}
+
+/* ════════════════════════════════════════════════════════════════
+   SEPARATOR
+   ════════════════════════════════════════════════════════════════ */
+.sep{width:60px;height:2px;background:var(--border);margin:52px auto;border-radius:1px}
+
+/* ════════════════════════════════════════════════════════════════
+   MOBILE OVERLAY
+   ════════════════════════════════════════════════════════════════ */
+.overlay{
+  display:none;position:fixed;inset:0;
+  background:rgba(0,0,0,.5);backdrop-filter:blur(4px);
+  z-index:90;opacity:0;transition:opacity .35s var(--ease);
+}
+.overlay.show{display:block;opacity:1}
+
+/* ════════════════════════════════════════════════════════════════
+   SKIP LINK (Accessibility)
+   ════════════════════════════════════════════════════════════════ */
+.skip-link{
+  position:fixed;top:-100px;left:16px;z-index:999;
+  background:var(--accent);color:#fff;padding:10px 20px;
+  border-radius:0 0 8px 8px;font-family:var(--font-s);font-size:.85rem;font-weight:500;
+  transition:top .3s var(--ease);
+}
+.skip-link:focus{top:0}
+
+/* ════════════════════════════════════════════════════════════════
+   RESPONSIVE
+   ════════════════════════════════════════════════════════════════ */
+@media(max-width:1080px){
+  .nav-mid{display:none}
+}
+@media(max-width:860px){
+  .sidebar{transform:translateX(-100%)}
+  .sidebar.open{transform:translateX(0);box-shadow:var(--shadow-l)}
+  .main{margin-left:0}
+  .hamburger{display:flex}
+}
+@media(max-width:600px){
+  .nav{padding:0 16px}
+  .hero{padding:48px 20px 72px}
+  .hero h1{font-size:2.2rem}
+  .hero .sub{font-size:1rem}
+  .hero-meta{gap:10px;font-size:.68rem}
+  .hero-meta span{padding:5px 10px}
+  .wrap{padding:0 18px 120px}
+  .ch{padding-top:60px}
+  .ch h2{font-size:1.6rem}
+  .ch h3{font-size:1.22rem;margin-top:36px}
+  .cb{border-radius:10px}
+  .cb pre{padding:16px}
+  .cb pre code{font-size:.75rem}
+  .fn-lbl{min-width:115px;font-size:.74rem}
+  .callout{padding:18px 16px}
+  .tw{margin:20px -18px;border-radius:0;border-left:0;border-right:0}
+  .step{gap:14px;padding:12px 14px}
+  .step-n{width:28px;height:28px;font-size:.74rem}
+  .diagram{padding:24px 14px}
+  .pipe .nd{padding:6px 12px;font-size:.72rem}
+}
+@media(max-width:380px){
+  .hero h1{font-size:1.85rem}
+  .hero .sub{font-size:.94rem}
+}
+
+/* ════════════════════════════════════════════════════════════════
+   PREFERS REDUCED MOTION
+   ════════════════════════════════════════════════════════════════ */
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{
+    animation-duration:0.01ms !important;
+    animation-iteration-count:1 !important;
+    transition-duration:0.01ms !important;
+  }
+  .reveal{opacity:1;transform:none}
+  html{scroll-behavior:auto}
+}
+
+/* ════════════════════════════════════════════════════════════════
+   TRANSITIONS & UTILITIES
+   ════════════════════════════════════════════════════════════════ */
+.nav,.sidebar,.callout,.cb,.diagram,table,.tw{transition:background .4s var(--ease),border-color .4s var(--ease)}
+.footer-note{
+  text-align:center;color:var(--text-3);font-family:var(--font-s);
+  font-size:.8rem;padding:56px 0 0;line-height:1.7;
+}
+.footer-note span{color:var(--accent)}
+</style>
+</head>
+<body>
+
+<!-- Skip link for accessibility -->
+<a href="#ch0" class="skip-link">Skip to content</a>
+
+<!-- Scroll progress -->
+<div class="scroll-progress" role="progressbar" aria-label="Reading progress"><div class="scroll-progress-fill" id="scrollProgress"></div></div>
+
+<!-- ═══════ NAV ═══════ -->
+<nav class="nav" id="mainNav" role="navigation" aria-label="Main navigation">
+  <a href="#hero" class="nav-logo">Snowden</a>
+  <ul class="nav-mid" id="navMid">
+    <li><a href="#ch0">What We Build</a></li>
+    <li><a href="#ch1">Foundation</a></li>
+    <li><a href="#ch2">Scanner</a></li>
+    <li><a href="#ch3">Analyst</a></li>
+    <li><a href="#ch4">Kelly</a></li>
+    <li><a href="#ch5">Risk</a></li>
+    <li><a href="#ch6">Execution</a></li>
+    <li><a href="#ch7">Calibration</a></li>
+    <li><a href="#ch8">Infra</a></li>
+    <li><a href="#ch9">Full Journey</a></li>
+  </ul>
+  <div class="nav-right">
+    <button class="theme-btn" onclick="toggleTheme()" aria-label="Toggle dark mode"><span id="themeIcon">&#9788;</span></button>
+    <button class="hamburger" id="burger" onclick="toggleSidebar()" aria-label="Toggle menu"><span></span><span></span><span></span></button>
+  </div>
+</nav>
+
+<!-- ═══════ OVERLAY ═══════ -->
+<div class="overlay" id="overlay" onclick="toggleSidebar()"></div>
+
+<!-- ═══════ SIDEBAR ═══════ -->
+<aside class="sidebar" id="sidebar" role="complementary" aria-label="Table of contents">
+  <div class="sidebar-hd">Chapters</div>
+  <ul class="toc" id="toc">
+    <li><a href="#ch0" data-ch="ch0">0. What Are We Building?</a></li>
+    <li><a href="#ch1" data-ch="ch1">1. The Foundation</a></li>
+    <li><a href="#ch2" data-ch="ch2">2. The Scanner</a></li>
+    <li><a href="#ch3" data-ch="ch3">3. The Analyst</a></li>
+    <li><a href="#ch4" data-ch="ch4">4. Kelly Criterion</a></li>
+    <li><a href="#ch5" data-ch="ch5">5. Risk Management</a></li>
+    <li><a href="#ch6" data-ch="ch6">6. Execution</a></li>
+    <li><a href="#ch7" data-ch="ch7">7. Calibration</a></li>
+    <li><a href="#ch8" data-ch="ch8">8. Infrastructure</a></li>
+    <li><a href="#ch9" data-ch="ch9">9. The Full Journey</a></li>
+  </ul>
+  <div class="sidebar-foot">
+    <div class="sidebar-hd">Progress</div>
+    <div class="prog-text" id="progText">~28 min remaining</div>
+    <div class="prog-track"><div class="prog-fill" id="progFill"></div></div>
+  </div>
+</aside>
+
+<!-- ═══════ MAIN ═══════ -->
+<main class="main" id="main-content">
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <h1 class="reveal">Understanding<br><span class="g">Snowden</span></h1>
+  <p class="sub reveal reveal-delay-1">
+    A technical deep-dive for developers. We walk through every piece of this
+    autonomous prediction market trading system, from scanning
+    Polymarket to placing Kelly-sized bets with LLM-generated probability estimates.
+  </p>
+  <div class="hero-meta reveal reveal-delay-2">
+    <span>&#9201; ~28 min read</span>
+    <span>&#9635; 10 Chapters</span>
+    <span>&lt;/&gt; Code Snippets</span>
+  </div>
+</section>
+
+<div class="wrap">
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     CHAPTER 0
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="ch" id="ch0">
+<div class="ch-tag reveal">Chapter 0</div>
+<h2 class="reveal">What Are We Building?</h2>
+
+<p class="reveal">
+  Snowden is an autonomous trading system for <strong>Polymarket</strong>, the
+  world's largest prediction market, where binary contracts trade on real-world
+  outcomes: elections, Fed rate decisions, geopolitical events, crypto price targets.
+  Each contract settles at $1 (YES) or $0 (NO), and trades at a price between 0 and 1
+  that represents the market's implied probability.
+</p>
+
+<p class="reveal">
+  Every 15 minutes, Snowden wakes up and runs a full cycle: scan hundreds of live markets,
+  call Claude Opus to estimate true probabilities, size positions with the Kelly criterion,
+  enforce strict risk limits through an automated Sentinel, and execute trades on the
+  Polymarket CLOB (central limit order book). Everything is logged to TimescaleDB and
+  visualized in Grafana.
+</p>
+
+<h3 class="reveal">The Thesis</h3>
+<p class="reveal">
+  Prediction markets are efficient <em>in aggregate</em> but have persistent
+  micro-inefficiencies that a systematic approach can exploit. These inefficiencies
+  cluster around a few patterns:
+</p>
+<ul class="reveal">
+  <li><strong>Stale markets</strong> &middot; thin liquidity, wide spreads, prices that haven't moved despite new information</li>
+  <li><strong>Longshot bias</strong> &middot; small-probability events consistently overpriced (people love lottery tickets)</li>
+  <li><strong>Partisan bias</strong> &middot; political markets where one side's money distorts the price away from polling data</li>
+  <li><strong>News latency</strong> &middot; prices adjust slowly to new information, especially in low-volume markets</li>
+</ul>
+<p class="reveal">
+  Snowden doesn't try to beat the market on every question. It runs a funnel to find
+  the 10&ndash;15 markets per cycle where edge is most likely, then sizes bets
+  conservatively enough to survive the inevitable losing streaks.
+</p>
+
+<h3 class="reveal">The Pipeline</h3>
+
+<div class="diagram reveal">
+  <div class="pipe">
+    <div class="nd">Scanner</div><div class="ar">&#8594;</div>
+    <div class="nd ac">Analyst</div><div class="ar">&#8594;</div>
+    <div class="nd">Kelly</div><div class="ar">&#8594;</div>
+    <div class="nd">Sentinel</div><div class="ar">&#8594;</div>
+    <div class="nd ac">Trader</div>
+  </div>
+  <div class="db-row">
+    <div class="lbl">all stages log to</div>
+    <div class="nd" style="font-size:.72rem">TimescaleDB</div>
+    <div class="ar">&#8594;</div>
+    <div class="nd" style="font-size:.72rem">Grafana</div>
+  </div>
+</div>
+
+<div class="tw reveal"><table>
+  <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+  <tbody>
+    <tr><td>Scan interval</td><td>15 minutes</td></tr>
+    <tr><td>Markets scanned</td><td>500+ per cycle</td></tr>
+    <tr><td>Funnel output</td><td>10&ndash;15 opportunities</td></tr>
+    <tr><td>Position sizing</td><td>Quarter-Kelly (f/4)</td></tr>
+    <tr><td>Risk limits</td><td>80% heat, 10% daily drawdown, 40% correlated</td></tr>
+    <tr><td>Starting bankroll</td><td>$2,000 USDC</td></tr>
+    <tr><td>LLM backbone</td><td>Claude Opus 4.6 (analyst) + Haiku 4.5 (triage)</td></tr>
+    <tr><td>Database</td><td>TimescaleDB (PostgreSQL 16 + hypertables)</td></tr>
+  </tbody>
+</table></div>
+</section>
+<div class="sep"></div>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     CHAPTER 1
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="ch" id="ch1">
+<div class="ch-tag reveal">Chapter 1</div>
+<h2 class="reveal">The Foundation</h2>
+
+<h3 class="reveal">Configuration</h3>
+<p class="reveal">
+  All configuration flows through a single Pydantic Settings class that reads from
+  environment variables and an optional <code>.env</code> file. No YAML, no TOML, no
+  config hierarchy to debug. Docker Compose sets the infra variables; everything else
+  has sensible defaults.
+</p>
+<p class="reveal">
+  The module-level <code>settings = Settings()</code> is the only global state in the
+  system. Every other module imports it by name.
+</p>
+
+<div class="cb reveal">
+<div class="cb-head"><span class="cb-file">snowden/config.py</span><button class="cb-copy" onclick="copyCode(this)">Copy</button></div>
+<pre><code><span class="k">class</span> <span class="t">Settings</span>(<span class="t">BaseSettings</span>):
+    <span class="p">model_config</span> = {<span class="s">"env_prefix"</span>: <span class="s">""</span>, <span class="s">"env_file"</span>: <span class="s">".env"</span>, <span class="s">"extra"</span>: <span class="s">"ignore"</span>}
+
+    <span class="c"># Database</span>
+    <span class="p">tsdb_host</span>: <span class="t">str</span> = <span class="s">"localhost"</span>
+    <span class="p">tsdb_port</span>: <span class="t">int</span> = <span class="n">5432</span>
+    <span class="p">tsdb_db</span>:   <span class="t">str</span> = <span class="s">"snowden"</span>
+
+    <span class="c"># Polymarket API credentials</span>
+    <span class="p">poly_api_key</span>:    <span class="t">str</span> = <span class="s">""</span>
+    <span class="p">poly_api_secret</span>: <span class="t">str</span> = <span class="s">""</span>
+    <span class="p">poly_private_key</span>: <span class="t">str</span> = <span class="s">""</span>
+
+    <span class="c"># Risk parameters</span>
+    <span class="p">max_heat</span>:            <span class="t">float</span> = <span class="n">0.80</span>   <span class="c"># 80% of equity deployed</span>
+    <span class="p">max_single_position</span>: <span class="t">float</span> = <span class="n">0.25</span>   <span class="c"># 25% max per market</span>
+    <span class="p">max_daily_drawdown</span>:  <span class="t">float</span> = <span class="n">0.10</span>   <span class="c"># 10% triggers kill switch</span>
+    <span class="p">max_correlated</span>:      <span class="t">float</span> = <span class="n">0.40</span>   <span class="c"># 40% per category</span>
+    <span class="p">kelly_divisor</span>:       <span class="t">float</span> = <span class="n">4.0</span>    <span class="c"># quarter-Kelly</span>
+    <span class="p">edge_threshold</span>:      <span class="t">float</span> = <span class="n">0.05</span>   <span class="c"># 5% minimum edge to trade</span>
+
+    <span class="d">@property</span>
+    <span class="k">def</span> <span class="f">tsdb_dsn</span>(<span class="p">self</span>) -> <span class="t">str</span>:
+        <span class="k">return</span> <span class="s">f"postgresql://{self.tsdb_user}:{self.tsdb_password}@{self.tsdb_host}:{self.tsdb_port}/{self.tsdb_db}"</span>
+
+    <span class="d">@property</span>
+    <span class="k">def</span> <span class="f">is_paper</span>(<span class="p">self</span>) -> <span class="t">bool</span>:
+        <span class="k">return</span> <span class="p">self</span>.mode == <span class="s">"paper"</span>
+
+<span class="p">settings</span> = <span class="f">Settings</span>()   <span class="c"># module-level singleton</span></code></pre>
+</div>
+
+<div class="callout reveal">
+<div class="callout-tag">Backend Dev Note</div>
+<p>
+  Pydantic Settings gives us runtime type validation for free. If someone sets
+  <code>TSDB_PORT=banana</code>, the app fails immediately at startup with a clear
+  validation error, not deep in a database connection two hours later.
+  The <code>"extra": "ignore"</code> flag means unrecognized env vars are silently
+  dropped, so you can share a <code>.env</code> across services without conflicts.
+</p>
+</div>
+
+<h3 class="reveal">The Type System</h3>
+<p class="reveal">
+  Every data shape in the system lives in a single file: <code>types.py</code>.
+  Pydantic models for structured data, <code>StrEnum</code> for categorical values,
+  and <code>Protocol</code> interfaces for swappable backends. This file is the
+  contract between every module. If you change a type here, the
+  type checker catches every downstream breakage.
+</p>
+
+<div class="cb reveal">
+<div class="cb-head"><span class="cb-file">snowden/types.py</span><button class="cb-copy" onclick="copyCode(this)">Copy</button></div>
+<pre><code><span class="k">class</span> <span class="t">Regime</span>(<span class="t">StrEnum</span>):
+    <span class="c">"""Market regime drives strategy selection."""</span>
+    <span class="p">CONSENSUS</span>   = <span class="s">"consensus"</span>        <span class="c"># market agrees, little edge</span>
+    <span class="p">CONTESTED</span>   = <span class="s">"contested"</span>        <span class="c"># genuine disagreement</span>
+    <span class="p">CATALYST</span>    = <span class="s">"catalyst_pending"</span> <span class="c"># event upcoming that will move price</span>
+    <span class="p">RESOLVING</span>   = <span class="s">"resolution_imminent"</span>
+    <span class="p">STALE</span>       = <span class="s">"stale"</span>            <span class="c"># no one is paying attention</span>
+    <span class="p">NEWS_DRIVEN</span> = <span class="s">"news_driven"</span>      <span class="c"># recent news shifted reality</span>
+
+<span class="k">class</span> <span class="t">Strategy</span>(<span class="t">StrEnum</span>):
+    <span class="p">THETA</span>          = <span class="s">"theta_harvest"</span>    <span class="c"># near-certain outcomes</span>
+    <span class="p">LONGSHOT_FADE</span>  = <span class="s">"longshot_fade"</span>    <span class="c"># overpriced tails</span>
+    <span class="p">NEWS_LATENCY</span>   = <span class="s">"news_latency"</span>     <span class="c"># slow price adjustment</span>
+    <span class="p">PARTISAN_FADE</span>  = <span class="s">"partisan_fade"</span>    <span class="c"># political bias</span>
+    <span class="p">CORRELATED_ARB</span> = <span class="s">"correlated_arb"</span>   <span class="c"># linked market mispricing</span>
+    <span class="p">STALE_REPRICE</span>  = <span class="s">"stale_reprice"</span>    <span class="c"># abandoned markets</span>
+
+<span class="d">@runtime_checkable</span>
+<span class="k">class</span> <span class="t">MarketClient</span>(<span class="t">Protocol</span>):
+    <span class="c">"""Swappable backend: LiveClient for real trading, SimClient for paper."""</span>
+    <span class="k">async def</span> <span class="f">get_active_markets</span>(<span class="p">self</span>) -> <span class="t">pl.DataFrame</span>: ...
+    <span class="k">async def</span> <span class="f">get_book</span>(<span class="p">self</span>, <span class="p">token_id</span>: <span class="t">str</span>) -> <span class="t">dict</span>: ...
+    <span class="k">async def</span> <span class="f">get_midpoint</span>(<span class="p">self</span>, <span class="p">token_id</span>: <span class="t">str</span>) -> <span class="t">float</span>: ...
+    <span class="k">async def</span> <span class="f">execute</span>(<span class="p">self</span>, <span class="p">signal</span>: <span class="t">TradeSignal</span>) -> <span class="t">OrderResult</span>: ...</code></pre>
+</div>
+
+<div class="callout reveal">
+<div class="callout-tag">Design Note</div>
+<p>
+  The <code>Protocol</code> interfaces are the key abstraction. <code>LiveClient</code>
+  and <code>SimClient</code> both satisfy <code>MarketClient</code> through structural
+  typing: no inheritance, no registration, no abstract base class.
+  If a class has the right methods with the right signatures, it's a valid
+  <code>MarketClient</code>. This makes testing trivial: any object with the right
+  shape works.
+</p>
+</div>
+</section>
+<div class="sep"></div>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     CHAPTER 2
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="ch" id="ch2">
+<div class="ch-tag reveal">Chapter 2</div>
+<h2 class="reveal">The Scanner</h2>
+
+<p class="reveal">
+  The scanner is a 5-stage funnel that reduces 500+ active Polymarket markets down to
+  10&ndash;15 tradeable opportunities. Stages 1&ndash;4 are pure data operations (Polars
+  and Python). Stage 5 is a single, cheap Haiku call to filter out noise before expensive
+  Opus analysis.
+</p>
+<p class="reveal">
+  The design principle: each stage is cheap enough to run on every market, and aggressive
+  enough to cut the dataset significantly. By the time we reach the LLM, we've already
+  eliminated 95% of markets through deterministic rules.
+</p>
+
+<h3 class="reveal">Stage 1: Fetch</h3>
+<p class="reveal">
+  Paginated fetch of all active markets from Polymarket's Gamma API. Events (which can
+  contain multiple binary markets) are flattened into individual rows. Token IDs, outcome
+  prices, volumes, and resolution dates are normalized into a Polars DataFrame.
+</p>
+<p class="reveal">
+  This is the only network-heavy stage. A typical fetch takes 1&ndash;2 seconds and returns
+  500&ndash;800 markets depending on platform activity.
+</p>
+
+<h3 class="reveal">Stage 2: Liquidity Gate</h3>
+<p class="reveal">
+  A pure Polars filter with four hard requirements. Any market that fails any condition
+  is dropped immediately.
+</p>
+
+<div class="cb reveal">
+<div class="cb-head"><span class="cb-file">snowden/scanner.py</span><button class="cb-copy" onclick="copyCode(this)">Copy</button></div>
+<pre><code><span class="k">def</span> <span class="f">stage_2_liquidity_gate</span>(<span class="p">df</span>: <span class="t">pl.DataFrame</span>) -> <span class="t">pl.DataFrame</span>:
+    <span class="c">"""Filter markets by minimum liquidity requirements."""</span>
+    <span class="k">return</span> df.filter(
+        (pl.col(<span class="s">"vol_24h"</span>) >= settings.min_liquidity_usd)           <span class="c"># >= $5,000</span>
+        & ((pl.col(<span class="s">"bid_depth"</span>) + pl.col(<span class="s">"ask_depth"</span>))
+           >= settings.min_book_depth_usd)                           <span class="c"># >= $500 total</span>
+        & (pl.col(<span class="s">"spread"</span>) <= settings.max_spread)                 <span class="c"># <= 8%</span>
+        & (pl.col(<span class="s">"hours_to_resolve"</span>) >= settings.min_hours_to_resolve)   <span class="c"># >= 24 hours</span>
+        & (pl.col(<span class="s">"hours_to_resolve"</span>) <= settings.max_days_to_resolve * <span class="n">24</span>) <span class="c"># <= 180 days</span>
+    )</code></pre>
+</div>
+
+<div class="callout reveal">
+<div class="callout-tag">Prediction Market Note</div>
+<p>
+  Why filter on resolution time? Markets resolving within 24 hours are usually efficiently
+  priced: too many eyeballs, too little time for the price to drift. Markets
+  beyond 180 days have too much uncertainty for our edge to compound meaningfully, and capital
+  is tied up too long. The sweet spot is 1&ndash;4 weeks: enough time for information asymmetry
+  to exist, short enough that your capital turns over.
+</p>
+</div>
+
+<h3 class="reveal">Stage 3: Efficiency Score</h3>
+<p class="reveal">
+  A composite score estimating how "beatable" each market is. Each component contributes
+  to a score between 0 and 1, where <em>lower</em> means <em>less efficient</em> (i.e., more
+  likely to have exploitable mispricing). Markets scoring above 0.4 are dropped.
+</p>
+
+<div class="tw reveal"><table>
+  <thead><tr><th>Component</th><th>Weight</th><th>Logic</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Spread</strong></td><td>25%</td><td>Wider spread = less liquidity = less efficient</td></tr>
+    <tr><td><strong>Volume</strong></td><td>20%</td><td>Lower 24h volume = fewer participants = less efficient</td></tr>
+    <tr><td><strong>Book depth</strong></td><td>15%</td><td>Shallow order book = easier to move the price</td></tr>
+    <tr><td><strong>Price extremity</strong></td><td>15%</td><td>Prices near 0 or 1 have known tail biases</td></tr>
+    <tr><td><strong>Time window</strong></td><td>25%</td><td>1&ndash;4 week resolution = ideal sweet spot for mispricing</td></tr>
+  </tbody>
+</table></div>
+
+<h3 class="reveal">Stage 4: Strategy Match</h3>
+<p class="reveal">
+  Each surviving market is classified into one or more strategy buckets based on
+  its price, volume, category, and spread characteristics. Markets that don't match
+  any known pattern are dropped. Priority scoring combines estimated edge, confidence
+  modifier, liquidity, and time decay into a single sortable number.
+</p>
+
+<div class="tw reveal"><table>
+  <thead><tr><th>Strategy</th><th>Trigger Condition</th><th>Edge Estimate</th><th>Why It Works</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Theta Harvest</strong></td><td>mid &ge; 0.88 or &le; 0.12</td><td>distance to boundary</td><td>Near-certain outcomes trade at a discount to certainty</td></tr>
+    <tr><td><strong>Longshot Fade</strong></td><td>mid &le; 0.08 or &ge; 0.92</td><td>tail &times; 0.5</td><td>People overpay for lottery-ticket outcomes</td></tr>
+    <tr><td><strong>Stale Reprice</strong></td><td>Low vol + wide spread</td><td>~4%</td><td>No one is watching; reality has moved on</td></tr>
+    <tr><td><strong>Partisan Fade</strong></td><td>Political + mid 0.25&ndash;0.75</td><td>~6%</td><td>Partisan money pushes prices away from polling data</td></tr>
+  </tbody>
+</table></div>
+
+<h3 class="reveal">Stage 5: Haiku Triage</h3>
+<p class="reveal">
+  One batch call to Claude Haiku with all remaining candidates. The model reads each
+  market's question, mid price, matched strategies, and volume, then
+  picks 10&ndash;15 worth deep analysis. This is a cheap filter (one Haiku call ~
+  $0.002) before expensive Opus calls (each ~ $0.05).
+</p>
+
+<div class="cb reveal">
+<div class="cb-head"><span class="cb-file">snowden/scanner.py</span><button class="cb-copy" onclick="copyCode(this)">Copy</button></div>
+<pre><code><span class="k">async def</span> <span class="f">stage_5_haiku_triage</span>(
+    <span class="p">candidates</span>: <span class="t">list</span>[<span class="t">ScanResult</span>],
+    <span class="p">anthropic_client</span>: <span class="t">anthropic.AsyncAnthropic</span>,
+) -> <span class="t">list</span>[<span class="t">ScanResult</span>]:
+    <span class="c">"""Haiku pre-screen: is this worth deep Analyst analysis?"""</span>
+    batch_text = <span class="s">"\n"</span>.join(
+        <span class="s">f"[{i}] Q: {c.market.question} | Mid: {c.market.mid:.2f} | "</span>
+        <span class="s">f"Strategies: {', '.join(s.value for s in c.matched_strategies)} | "</span>
+        <span class="s">f"Vol24h: ${c.market.vol_24h:,.0f}"</span>
+        <span class="k">for</span> i, c <span class="k">in</span> enumerate(candidates)
+    )
+
+    response = <span class="k">await</span> anthropic_client.messages.create(
+        model=settings.triage_model,   <span class="c"># claude-haiku-4-5</span>
+        max_tokens=<span class="n">500</span>,
+        system=<span class="s">"Select 10-15 markets worth deep analysis. Skip obviously "</span>
+               <span class="s">"efficient markets. Respond with comma-separated indices only."</span>,
+        messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: batch_text}],
+    )
+    indices = [<span class="f">int</span>(x.strip()) <span class="k">for</span> x <span class="k">in</span> response.content[<span class="n">0</span>].text.split(<span class="s">","</span>)
+               <span class="k">if</span> x.strip().isdigit()]
+    <span class="k">return</span> [candidates[i] <span class="k">for</span> i <span class="k">in</span> indices <span class="k">if</span> i < <span class="f">len</span>(candidates)]</code></pre>
+</div>
+
+<h4 class="reveal">The Funnel in Numbers</h4>
+
+<div class="funnel reveal stagger-children">
+  <div class="fn-row reveal"><div class="fn-lbl">Stage 1: Raw fetch</div><div class="fn-bar">500+</div></div>
+  <div class="fn-row reveal"><div class="fn-lbl">Stage 2: Liquidity gate</div><div class="fn-bar">~100</div></div>
+  <div class="fn-row reveal"><div class="fn-lbl">Stage 3: Efficiency filter</div><div class="fn-bar">~50</div></div>
+  <div class="fn-row reveal"><div class="fn-lbl">Stage 4: Strategy match</div><div class="fn-bar">~30</div></div>
+  <div class="fn-row reveal"><div class="fn-lbl">Stage 5: Haiku triage</div><div class="fn-bar">10&ndash;15</div></div>
+</div>
+</section>
+<div class="sep"></div>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     CHAPTER 3
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="ch" id="ch3">
+<div class="ch-tag reveal">Chapter 3</div>
+<h2 class="reveal">The Analyst</h2>
+
+<p class="reveal">
+  The Analyst is the most expensive and most important component: a Claude Opus call
+  for each candidate market, asking the model to estimate the <em>true probability</em>
+  of the event occurring, independent of what the market currently prices. The prompt
+  engineering is the core intellectual property of the system.
+</p>
+
+<h3 class="reveal">The System Prompt</h3>
+<p class="reveal">
+  The system prompt is designed to counteract known LLM failure modes in probability
+  estimation. Without explicit guidance, language models anchor on the market price,
+  fall for narrative bias, exhibit recency bias, and cluster their estimates at round
+  numbers (50%, 75%, 90%). The prompt addresses each of these directly.
+</p>
+
+<div class="cb reveal">
+<div class="cb-head"><span class="cb-file">snowden/agents/analyst.py, system prompt (abbreviated)</span><button class="cb-copy" onclick="copyCode(this)">Copy</button></div>
+<pre><code>ANALYST_SYSTEM_PROMPT = (
+    <span class="s">"You are a professional prediction market analyst. Estimate the TRUE "</span>
+    <span class="s">"probability of an event, independent of the market price.\n\n"</span>
+
+    <span class="s">"CALIBRATION RULES:\n"</span>
+    <span class="s">"1. When you say 70%, the event should happen ~70% of the time.\n"</span>
+    <span class="s">"2. Base estimates on EVIDENCE, not narrative. Weight hard data\n"</span>
+    <span class="s">"   (polls, filings, schedules) over soft signals (sentiment, vibes).\n"</span>
+    <span class="s">"3. Political markets: weight polling aggregates over pundit takes.\n"</span>
+    <span class="s">"4. Distinguish 'I don't know' (low confidence, near market price)\n"</span>
+    <span class="s">"   from 'the market is wrong' (high confidence, far from market).\n"</span>
+    <span class="s">"5. Biases to AVOID:\n"</span>
+    <span class="s">"   - Anchoring on the current market price\n"</span>
+    <span class="s">"   - Narrative bias (good story != high probability)\n"</span>
+    <span class="s">"   - Recency bias (last week's news != permanent shift)\n"</span>
+    <span class="s">"   - Round number bias (don't cluster at 50%, 75%, 90%)\n"</span>
+    <span class="s">"6. If evidence is thin, say so. Set confidence LOW.\n\n"</span>
+
+    <span class="s">"IMPORTANT: p_est_raw is YOUR raw estimate BEFORE calibration.\n"</span>
+    <span class="s">"The system applies Platt scaling separately. Give your honest best."</span>
+)</code></pre>
+</div>
+
+<h3 class="reveal">Analysis Flow</h3>
+<p class="reveal">
+  For each candidate market, the Analyst executes a four-step pipeline:
+</p>
+
+<ol class="steps reveal stagger-children">
+  <li class="step reveal"><span class="step-n">1</span><span class="step-t"><strong>Fetch news</strong> via category-specific RSS feeds (politics, crypto, finance, sports, legal). Feeds are parsed with <code>feedparser</code>, deduplicated by title prefix, sorted by recency, and capped at 15 items. General news feeds are always included alongside the category-specific ones.</span></li>
+  <li class="step reveal"><span class="step-n">2</span><span class="step-t"><strong>Build prompt</strong> with market data (mid, bid/ask, spread, volume, open interest), 7-day price history, matched strategies from Stage 4, resolution source, and formatted news context. The description is capped at 500 characters to stay focused.</span></li>
+  <li class="step reveal"><span class="step-n">3</span><span class="step-t"><strong>Call Claude Opus</strong>. The model returns a JSON object with its raw probability estimate (<code>p_est_raw</code>), confidence level, regime classification, reasoning (capped at 3 sentences), and a strategy hint.</span></li>
+  <li class="step reveal"><span class="step-n">4</span><span class="step-t"><strong>Apply Platt scaling</strong> via <code>calibrator.correct(raw_est)</code> to transform the raw LLM probability into a calibrated estimate. The calibrated value becomes <code>p_est</code> and is used for all downstream decisions.</span></li>
+</ol>
+
+<div class="cb reveal">
+<div class="cb-head"><span class="cb-file">snowden/agents/analyst.py</span><button class="cb-copy" onclick="copyCode(this)">Copy</button></div>
+<pre><code><span class="k">async def</span> <span class="f">analyze_market</span>(
+    <span class="p">scan</span>: <span class="t">ScanResult</span>, <span class="p">calibrator</span>: <span class="t">Calibrator</span>,
+    <span class="p">client</span>: <span class="t">anthropic.AsyncAnthropic</span> | <span class="t">None</span> = <span class="t">None</span>,
+) -> <span class="t">EventAnalysis</span> | <span class="t">None</span>:
+
+    <span class="c"># Step 1: Fetch fresh news for this market's category</span>
+    news_items = <span class="k">await</span> fetch_news_for_market(
+        scan.market.question, scan.market.category.value,
+    )
+    scan.news_headlines = [item.title <span class="k">for</span> item <span class="k">in</span> news_items]
+
+    <span class="c"># Step 2: Build the analyst prompt</span>
+    prompt = build_analyst_prompt(scan)
+
+    <span class="c"># Step 3: Call Opus, parse JSON response</span>
+    response = <span class="k">await</span> client.messages.create(
+        model=settings.analyst_model,  <span class="c"># claude-opus-4-6</span>
+        max_tokens=settings.analyst_max_tokens,
+        system=ANALYST_SYSTEM_PROMPT,
+        messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: prompt}],
+    )
+    data = json.loads(response.content[<span class="n">0</span>].text.strip()
+                      .replace(<span class="s">"```json"</span>, <span class="s">""</span>).replace(<span class="s">"```"</span>, <span class="s">""</span>))
+
+    <span class="c"># Step 4: Apply calibration correction</span>
+    raw_est = <span class="f">float</span>(data[<span class="s">"p_est_raw"</span>])
+    calibrated = calibrator.correct(raw_est)
+
+    <span class="k">return</span> <span class="f">EventAnalysis</span>(
+        market_id=data[<span class="s">"market_id"</span>], question=data[<span class="s">"question"</span>],
+        p_market=<span class="f">float</span>(data[<span class="s">"p_market"</span>]),
+        p_est=calibrated, p_est_raw=raw_est,
+        confidence=<span class="f">float</span>(data[<span class="s">"confidence"</span>]),
+        regime=<span class="f">Regime</span>(data[<span class="s">"regime"</span>]),
+        edge=<span class="f">round</span>(calibrated - <span class="f">float</span>(data[<span class="s">"p_market"</span>]), <span class="n">4</span>),
+        reasoning=data[<span class="s">"reasoning"</span>],
+        key_factors=data.get(<span class="s">"key_factors"</span>, []),
+        data_quality=<span class="f">float</span>(data.get(<span class="s">"data_quality"</span>, <span class="n">0.5</span>)),
+        strategy_hint=<span class="f">Strategy</span>(data[<span class="s">"strategy_hint"</span>]) <span class="k">if</span> data.get(<span class="s">"strategy_hint"</span>) <span class="k">else</span> <span class="t">None</span>,
+    )</code></pre>
+</div>
+
+<div class="callout reveal">
+<div class="callout-tag">Prediction Market Note</div>
+<p>
+  The Analyst outputs <code>p_est_raw</code>, its honest best estimate
+  before any correction. The system then applies Platt scaling (logistic regression on
+  historical log-odds vs outcomes) to fix systematic bias. This separation is critical:
+  the LLM gives its best guess, statistics fix the systematic errors. Over time, the
+  calibrator learns whether Claude tends to be overconfident in the 60&ndash;80% range,
+  or underconfident near the tails, and corrects for it automatically.
+</p>
+</div>
+</section>
+<div class="sep"></div>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     CHAPTER 4
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="ch" id="ch4">
+<div class="ch-tag reveal">Chapter 4</div>
+<h2 class="reveal">Kelly Criterion</h2>
+
+<p class="reveal">
+  The Kelly criterion determines optimal bet sizing for repeated wagers with a known edge.
+  In prediction markets, each trade is a binary bet: the contract settles at $1 (YES) or
+  $0 (NO). If our estimated probability differs from the market price, we have edge, and
+  Kelly tells us exactly how much of our bankroll to wager.
+</p>
+
+<h3 class="reveal">The Math</h3>
+<p class="reveal">
+  For buying YES at market price <code>p_market</code> with estimated true probability
+  <code>p_est</code>, the implied decimal odds are <em>b = (1/p_market) - 1</em>, and the
+  Kelly fraction is <em>f = (p_est &times; b - (1 - p_est)) / b</em>. For buying NO,
+  we mirror the probabilities. The fraction is then divided by <code>kelly_divisor</code>
+  (default 4) and clamped to <code>max_single_position</code> (25%).
+</p>
+
+<div class="cb reveal">
+<div class="cb-head"><span class="cb-file">snowden/kelly.py</span><button class="cb-copy" onclick="copyCode(this)">Copy</button></div>
+<pre><code><span class="k">def</span> <span class="f">kelly_fraction</span>(
+    <span class="p">p_est</span>: <span class="t">float</span>, <span class="p">p_market</span>: <span class="t">float</span>,
+    <span class="p">divisor</span>: <span class="t">float</span> | <span class="t">None</span> = <span class="t">None</span>,
+    <span class="p">max_frac</span>: <span class="t">float</span> | <span class="t">None</span> = <span class="t">None</span>,
+) -> <span class="t">float</span> | <span class="t">None</span>:
+    <span class="c">"""Returns None if no edge or negative Kelly."""</span>
+    divisor = divisor <span class="k">or</span> settings.kelly_divisor     <span class="c"># 4.0</span>
+    max_frac = max_frac <span class="k">or</span> settings.max_single_position <span class="c"># 0.25</span>
+
+    <span class="c"># Minimum edge threshold to avoid noise trades</span>
+    <span class="k">if</span> <span class="f">abs</span>(p_est - p_market) < settings.kelly_edge_threshold: <span class="c"># 3%</span>
+        <span class="k">return</span> <span class="t">None</span>
+
+    <span class="k">if</span> p_est > p_market:
+        b = (<span class="n">1.0</span> / p_market) - <span class="n">1.0</span>            <span class="c"># decimal odds</span>
+        f = (p_est * b - (<span class="n">1</span> - p_est)) / b   <span class="c"># Kelly fraction</span>
+    <span class="k">else</span>:
+        <span class="c"># Buying NO: mirror the probabilities</span>
+        p_no_market = <span class="n">1.0</span> - p_market
+        p_no_est = <span class="n">1.0</span> - p_est
+        b = (<span class="n">1.0</span> / p_no_market) - <span class="n">1.0</span>
+        f = (p_no_est * b - p_est) / b
+
+    <span class="k">if</span> f <= <span class="n">0</span>:
+        <span class="k">return</span> <span class="t">None</span>
+
+    <span class="k">return</span> <span class="f">float</span>(np.clip(f / divisor, <span class="n">0.0</span>, max_frac))</code></pre>
+</div>
+
+<div class="callout reveal">
+<div class="callout-tag">Prediction Market Note</div>
+<p>
+  <strong>Why quarter-Kelly?</strong> Full Kelly maximizes the long-run compound growth rate
+  but has enormous variance. A bad streak can draw down 50%+ before
+  recovering. The growth rate scales as <em>f &times; (2 - f)</em> relative to full Kelly,
+  so quarter-Kelly captures ~44% of the growth rate while reducing variance by 75%. For a
+  $2,000 experiment where survival matters more than speed, this is the right trade-off.
+</p>
+</div>
+
+<h3 class="reveal">Signal Building</h3>
+<p class="reveal">
+  The <code>build_signal</code> function ties estimation to execution. It computes a
+  confidence-weighted edge (<code>|p_est - p_market| &times; confidence</code>), checks
+  whether it exceeds the 5% minimum, determines direction (YES or NO), computes the dollar
+  size, and adds a 1-cent slippage buffer to the limit price.
+</p>
+
+<div class="cb reveal">
+<div class="cb-head"><span class="cb-file">snowden/kelly.py</span><button class="cb-copy" onclick="copyCode(this)">Copy</button></div>
+<pre><code><span class="k">def</span> <span class="f">build_signal</span>(<span class="p">market_id</span>, <span class="p">yes_token</span>, <span class="p">no_token</span>,
+                  <span class="p">p_est</span>, <span class="p">p_market</span>, <span class="p">confidence</span>, <span class="p">bankroll</span>, <span class="p">strategy</span>):
+    <span class="c"># Confidence-weighted edge must exceed 5%</span>
+    edge = <span class="f">abs</span>(p_est - p_market) * confidence
+    <span class="k">if</span> edge < settings.edge_threshold:
+        <span class="k">return</span> <span class="t">None</span>
+
+    going_yes = p_est > p_market
+    size = compute_size(effective_p_est, effective_p_market, bankroll)
+    <span class="k">if</span> size <span class="k">is</span> <span class="t">None</span> <span class="k">or</span> size < settings.min_trade_usd:  <span class="c"># $5 minimum</span>
+        <span class="k">return</span> <span class="t">None</span>
+
+    <span class="k">return</span> <span class="f">TradeSignal</span>(
+        direction=<span class="s">"YES"</span> <span class="k">if</span> going_yes <span class="k">else</span> <span class="s">"NO"</span>,
+        size_usd=<span class="f">round</span>(size, <span class="n">2</span>),
+        limit_price=effective_p_market + settings.slippage_buffer,  <span class="c"># +$0.01</span>
+        kelly_frac=size / bankroll,
+        edge=<span class="f">round</span>(p_est - p_market, <span class="n">4</span>),
+        ...
+    )</code></pre>
+</div>
+</section>
+<div class="sep"></div>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     CHAPTER 5
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="ch" id="ch5">
+<div class="ch-tag reveal">Chapter 5</div>
+<h2 class="reveal">Risk Management</h2>
+
+<p class="reveal">
+  The Sentinel is pure math. No LLM reasoning, no ambiguity, no exceptions. Four sequential
+  checks, each with a hard limit. If any check fails, the trade is vetoed. If daily drawdown
+  exceeds 10%, the entire system freezes.
+</p>
+
+<div class="cb reveal">
+<div class="cb-head"><span class="cb-file">snowden/agents/sentinel.py</span><button class="cb-copy" onclick="copyCode(this)">Copy</button></div>
+<pre><code><span class="k">def</span> <span class="f">check_signal</span>(
+    <span class="p">signal</span>: <span class="t">TradeSignal</span>, <span class="p">portfolio</span>: <span class="t">PortfolioState</span>,
+) -> <span class="t">RiskCheck</span>:
+
+    <span class="c"># CHECK 1: Single position size</span>
+    single_exposure = signal.size_usd / portfolio.total_equity
+    <span class="k">if</span> single_exposure > settings.max_single_position:  <span class="c"># > 25%</span>
+        <span class="k">return</span> <span class="f">RiskCheck</span>(approved=<span class="t">False</span>, reason=<span class="s">"Single position too large"</span>, ...)
+
+    <span class="c"># CHECK 2: Portfolio heat (total capital deployed)</span>
+    new_heat = (portfolio.heat * portfolio.total_equity + signal.size_usd) \
+               / portfolio.total_equity
+    <span class="k">if</span> new_heat > settings.max_heat:  <span class="c"># > 80%</span>
+        <span class="k">return</span> <span class="f">RiskCheck</span>(approved=<span class="t">False</span>, reason=<span class="s">"Heat limit exceeded"</span>, ...)
+
+    <span class="c"># CHECK 3: Daily drawdown (kills switch if > 10%)</span>
+    <span class="k">if</span> portfolio.daily_drawdown > settings.max_daily_drawdown:
+        <span class="k">return</span> <span class="f">RiskCheck</span>(approved=<span class="t">False</span>, reason=<span class="s">"FROZEN: drawdown limit"</span>, ...)
+
+    <span class="c"># CHECK 4: Correlated exposure (same category)</span>
+    correlated_usd = <span class="f">sum</span>(
+        p.size_usd <span class="k">for</span> p <span class="k">in</span> portfolio.positions
+        <span class="k">if</span> p.category.value == signal.category.value
+    )
+    <span class="k">if</span> (correlated_usd + signal.size_usd) / portfolio.total_equity
+            > settings.max_correlated:  <span class="c"># > 40%</span>
+        <span class="k">return</span> <span class="f">RiskCheck</span>(approved=<span class="t">False</span>, reason=<span class="s">"Correlated limit"</span>, ...)
+
+    <span class="c"># All checks passed</span>
+    <span class="k">return</span> <span class="f">RiskCheck</span>(approved=<span class="t">True</span>, heat=new_heat, ...)</code></pre>
+</div>
+
+<div class="tw reveal"><table>
+  <thead><tr><th>Check</th><th>Limit</th><th>Rationale</th><th>On Breach</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Single position</strong></td><td>&lt; 25% of equity</td><td>No one bet should be existential</td><td>Veto signal</td></tr>
+    <tr><td><strong>Portfolio heat</strong></td><td>&lt; 80%</td><td>Always keep 20% cash for opportunities</td><td>Veto signal</td></tr>
+    <tr><td><strong>Daily drawdown</strong></td><td>&lt; 10%</td><td>Losing $200 in a day means something is wrong</td><td>FREEZE all trading</td></tr>
+    <tr><td><strong>Correlated exposure</strong></td><td>&lt; 40% per category</td><td>Don't be all-in on "politics" or "crypto"</td><td>Veto signal</td></tr>
+  </tbody>
+</table></div>
+
+<div class="callout reveal">
+<div class="callout-tag">Design Note</div>
+<p>
+  The Sentinel is deliberately simple. Complex risk models (Value-at-Risk, Monte Carlo,
+  copulas) give a false sense of precision. Four hard limits, checked in sequence, with a
+  kill switch. If any limit is hit, trading stops. No exceptions, no "just this once," no
+  manual override. The best risk management is the kind that can't be argued with.
+</p>
+</div>
+</section>
+<div class="sep"></div>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     CHAPTER 6
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="ch" id="ch6">
+<div class="ch-tag reveal">Chapter 6</div>
+<h2 class="reveal">Execution</h2>
+
+<p class="reveal">
+  The Trader is pure execution, with no analysis and no opinion. It receives
+  a <code>TradeSignal</code> that has already been approved by the Sentinel, checks the
+  order book for adverse price movement, and places a limit order.
+</p>
+
+<div class="cb reveal">
+<div class="cb-head"><span class="cb-file">snowden/agents/trader.py</span><button class="cb-copy" onclick="copyCode(this)">Copy</button></div>
+<pre><code><span class="k">async def</span> <span class="f">execute_signal</span>(
+    <span class="p">signal</span>: <span class="t">TradeSignal</span>,
+    <span class="p">client</span>: <span class="t">LiveClient</span> | <span class="t">SimClient</span>,
+    <span class="p">store</span>: <span class="t">Store</span>,
+) -> <span class="t">OrderResult</span>:
+    <span class="c"># Pre-execution: check order book hasn't moved against us</span>
+    book = <span class="k">await</span> client.get_book(signal.token_id)
+    best_ask = <span class="f">float</span>(book[<span class="s">"asks"</span>][<span class="n">0</span>][<span class="s">"price"</span>]) <span class="k">if</span> book.get(<span class="s">"asks"</span>) <span class="k">else</span> <span class="n">1.0</span>
+
+    <span class="c"># Slippage guard: abort if book moved > 3% against us</span>
+    <span class="k">if</span> signal.direction == <span class="s">"YES"</span> <span class="k">and</span> best_ask > signal.p_market * <span class="n">1.03</span>:
+        <span class="k">return</span> <span class="f">OrderResult</span>(status=<span class="s">"CANCELLED"</span>, ts=datetime.now(UTC))
+
+    <span class="c"># Execute through client (live order or paper fill)</span>
+    result = <span class="k">await</span> client.execute(signal)
+
+    <span class="c"># Log every execution to TimescaleDB</span>
+    <span class="k">await</span> store.log_trade(signal, result, paper=result.status == <span class="s">"PAPER"</span>)
+    <span class="k">return</span> result</code></pre>
+</div>
+
+<h3 class="reveal">Paper vs Live</h3>
+<p class="reveal">
+  The system ships with two clients that both satisfy the <code>MarketClient</code> protocol.
+  <code>SimClient</code> delegates all <em>reads</em> to the real Polymarket API (so you
+  scan real markets at real prices) but simulates <em>writes</em>: <code>execute()</code>
+  returns an instant <code>"PAPER"</code> fill at the current midpoint with zero slippage.
+  <code>LiveClient</code> uses <code>py-clob-client</code> to sign and submit real limit
+  orders to the Polygon-based CLOB.
+</p>
+
+<div class="callout reveal">
+<div class="callout-tag">Backend Dev Note</div>
+<p>
+  Paper mode isn't a separate codepath. It's the same pipeline with a
+  different client injected at startup. The Chief doesn't know or care whether it's paper
+  or live. This means every bug you find in paper mode is a bug you've fixed before going live.
+</p>
+</div>
+</section>
+<div class="sep"></div>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     CHAPTER 7
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="ch" id="ch7">
+<div class="ch-tag reveal">Chapter 7</div>
+<h2 class="reveal">Calibration</h2>
+
+<p class="reveal">
+  The calibration engine answers the question: <em>when Claude says 70%, does the event
+  actually happen 70% of the time?</em> If there's systematic bias (e.g., Claude is
+  overconfident in the 60&ndash;80% range), Platt scaling corrects it. If there's no bias,
+  the calibrator passes through the raw estimate unchanged.
+</p>
+
+<h3 class="reveal">Platt Scaling</h3>
+<p class="reveal">
+  The technique is simple: take all resolved predictions, convert raw probabilities to
+  log-odds, and fit a logistic regression against actual outcomes. The fitted model then
+  maps future raw probabilities to calibrated ones. The calibrator needs at least 50
+  resolved predictions before it activates; before that, raw estimates
+  pass through unchanged.
+</p>
+
+<div class="cb reveal">
+<div class="cb-head"><span class="cb-file">snowden/calibrate.py</span><button class="cb-copy" onclick="copyCode(this)">Copy</button></div>
+<pre><code><span class="k">class</span> <span class="t">Calibrator</span>:
+    <span class="k">def</span> <span class="f">__init__</span>(<span class="p">self</span>):
+        <span class="p">self</span>._scaler = <span class="f">LogisticRegression</span>(C=<span class="n">1.0</span>, solver=<span class="s">"lbfgs"</span>)
+        <span class="p">self</span>._fitted = <span class="t">False</span>
+
+    <span class="k">async def</span> <span class="f">fit_from_db</span>(<span class="p">self</span>, <span class="p">store</span>: <span class="t">Store</span>, <span class="p">min_samples</span>=<span class="n">50</span>) -> <span class="t">bool</span>:
+        resolved = <span class="k">await</span> store.get_resolved_predictions()
+        <span class="k">if</span> <span class="f">len</span>(resolved) < min_samples:
+            <span class="k">return</span> <span class="t">False</span>  <span class="c"># Not enough data yet</span>
+
+        preds = resolved[<span class="s">"p_est_raw"</span>].to_numpy().astype(np.float64)
+        actuals = resolved[<span class="s">"outcome"</span>].to_numpy().astype(np.int32)
+
+        <span class="c"># Clip to avoid log(0), convert to log-odds</span>
+        preds = np.clip(preds, <span class="n">0.001</span>, <span class="n">0.999</span>)
+        logits = np.log(preds / (<span class="n">1.0</span> - preds)).reshape(-<span class="n">1</span>, <span class="n">1</span>)
+
+        <span class="p">self</span>._scaler.fit(logits, actuals)
+        <span class="p">self</span>._fitted = <span class="t">True</span>
+        <span class="k">return</span> <span class="t">True</span>
+
+    <span class="k">def</span> <span class="f">correct</span>(<span class="p">self</span>, <span class="p">raw_prob</span>: <span class="t">float</span>) -> <span class="t">float</span>:
+        <span class="c">"""Apply Platt scaling. Pass-through if not yet fitted."""</span>
+        <span class="k">if not</span> <span class="p">self</span>._fitted:
+            <span class="k">return</span> raw_prob
+        raw_prob = <span class="f">float</span>(np.clip(raw_prob, <span class="n">0.001</span>, <span class="n">0.999</span>))
+        logit = np.log(raw_prob / (<span class="n">1.0</span> - raw_prob))
+        <span class="k">return</span> <span class="f">float</span>(<span class="p">self</span>._scaler.predict_proba([[logit]])[<span class="n">0</span>][<span class="n">1</span>])</code></pre>
+</div>
+
+<div class="callout reveal">
+<div class="callout-tag">Prediction Market Note</div>
+<p>
+  <strong>Brier score</strong> is the gold standard for measuring probability calibration:
+  the mean squared error between predicted probabilities and actual binary outcomes. A score
+  of <strong>0</strong> = perfect calibration. <strong>0.25</strong> = coin-flip performance.
+  <strong>1.0</strong> = consistently wrong. For reference, Tetlock's superforecasters achieve
+  ~0.15 on geopolitical questions. If Snowden stays below 0.20, the Kelly criterion
+  will generate positive expected value over time.
+</p>
+</div>
+
+<h3 class="reveal">Reliability Report</h3>
+<p class="reveal">
+  The <code>generate_report()</code> method produces a full calibration diagnostic: Brier
+  score, decile reliability buckets (predicted probability vs actual outcome rate), and
+  over/under-confidence bias detection. Predictions above 50% where the actual rate is lower
+  indicate overconfidence; predictions below 50% where the actual rate is higher indicate
+  underconfidence. Both are common LLM failure modes.
+</p>
+
+<h3 class="reveal">Resolution Backfill</h3>
+<p class="reveal">
+  A dedicated script (<code>scripts/resolve.py</code>) polls Polymarket for resolved
+  markets and backfills outcomes into the <code>predictions</code> table. This is how
+  the calibrator accumulates training data. As more predictions resolve, the Platt
+  scaling becomes more accurate, creating a positive feedback loop.
+</p>
+</section>
+<div class="sep"></div>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     CHAPTER 8
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="ch" id="ch8">
+<div class="ch-tag reveal">Chapter 8</div>
+<h2 class="reveal">Infrastructure</h2>
+
+<h3 class="reveal">TimescaleDB Schema</h3>
+<p class="reveal">
+  Six tables, all configured as <strong>hypertables</strong> (TimescaleDB's time-partitioned
+  tables that automatically shard by timestamp). Every stage of the pipeline writes structured
+  data. The schema is designed so that every decision is auditable: you can trace any trade
+  back to the prediction, the scan result, and the market tick that triggered it.
+</p>
+
+<div class="tw reveal"><table>
+  <thead><tr><th>Table</th><th>Purpose</th><th>Write Frequency</th><th>Key Columns</th></tr></thead>
+  <tbody>
+    <tr><td><code>market_ticks</code></td><td>Price snapshots</td><td>Per scan per market</td><td>mid, spread, vol_24h, depths</td></tr>
+    <tr><td><code>predictions</code></td><td>Every analyst estimate</td><td>10&ndash;15 per cycle</td><td>p_est, p_est_raw, confidence, regime, resolved, outcome</td></tr>
+    <tr><td><code>trades</code></td><td>Paper + live orders</td><td>0&ndash;5 per cycle</td><td>size, price, status, kelly_frac, strategy</td></tr>
+    <tr><td><code>portfolio_snapshots</code></td><td>Portfolio state</td><td>1 per cycle</td><td>bankroll, heat, daily_pnl, drawdown</td></tr>
+    <tr><td><code>scanner_metrics</code></td><td>Funnel numbers</td><td>1 per cycle</td><td>stage_1..5 counts, duration_ms</td></tr>
+    <tr><td><code>market_metadata</code></td><td>Cached market info</td><td>On first scan</td><td>question, category, token IDs</td></tr>
+  </tbody>
+</table></div>
+
+<div class="cb reveal">
+<div class="cb-head"><span class="cb-file">infra/init.sql</span><button class="cb-copy" onclick="copyCode(this)">Copy</button></div>
+<pre><code><span class="k">CREATE TABLE</span> predictions (
+    ts           <span class="t">TIMESTAMPTZ</span> <span class="k">NOT NULL</span>,
+    market_id    <span class="t">TEXT</span>        <span class="k">NOT NULL</span>,
+    question     <span class="t">TEXT</span>,
+    p_market     <span class="t">FLOAT8</span>,
+    p_est        <span class="t">FLOAT8</span>,         <span class="c">-- calibrated estimate</span>
+    p_est_raw    <span class="t">FLOAT8</span>,         <span class="c">-- raw LLM output</span>
+    confidence   <span class="t">FLOAT8</span>,
+    regime       <span class="t">TEXT</span>,
+    strategy     <span class="t">TEXT</span>,
+    edge         <span class="t">FLOAT8</span>,
+    reasoning    <span class="t">TEXT</span>,
+    data_quality <span class="t">FLOAT8</span>      <span class="k">DEFAULT</span> <span class="n">0.5</span>,
+    resolved     <span class="t">BOOLEAN</span>     <span class="k">DEFAULT FALSE</span>,
+    outcome      <span class="t">SMALLINT</span>        <span class="c">-- 1 = YES, 0 = NO</span>
+);
+<span class="k">SELECT</span> create_hypertable(<span class="s">'predictions'</span>, <span class="s">'ts'</span>);
+<span class="k">CREATE INDEX</span> idx_pred_market <span class="k">ON</span> predictions (market_id, ts <span class="k">DESC</span>);
+<span class="k">CREATE INDEX</span> idx_pred_resolved <span class="k">ON</span> predictions (resolved) <span class="k">WHERE</span> resolved = <span class="t">true</span>;</code></pre>
+</div>
+
+<h3 class="reveal">Continuous Aggregates</h3>
+<p class="reveal">
+  TimescaleDB's continuous aggregates are materialized views that incrementally refresh
+  as new data arrives. Three views power the Grafana dashboards without requiring any
+  manual rollup logic:
+</p>
+
+<div class="cb reveal">
+<div class="cb-head"><span class="cb-file">infra/continuous_aggs.sql</span><button class="cb-copy" onclick="copyCode(this)">Copy</button></div>
+<pre><code><span class="c">-- Live Brier score, average edge, and confidence over time</span>
+<span class="k">CREATE MATERIALIZED VIEW</span> prediction_accuracy_hourly
+<span class="k">WITH</span> (timescaledb.continuous) <span class="k">AS</span>
+<span class="k">SELECT</span>
+    time_bucket(<span class="s">'1 hour'</span>, ts) <span class="k">AS</span> bucket,
+    <span class="f">COUNT</span>(*) <span class="k">AS</span> n_predictions,
+    <span class="f">COUNT</span>(*) <span class="k">FILTER</span> (<span class="k">WHERE</span> resolved) <span class="k">AS</span> n_resolved,
+    <span class="f">AVG</span>(<span class="k">CASE WHEN</span> resolved <span class="k">THEN</span> (p_est - outcome)^<span class="n">2</span> <span class="k">END</span>) <span class="k">AS</span> brier_score,
+    <span class="f">AVG</span>(edge) <span class="k">AS</span> avg_edge,
+    <span class="f">AVG</span>(confidence) <span class="k">AS</span> avg_confidence
+<span class="k">FROM</span> predictions <span class="k">GROUP BY</span> bucket;</code></pre>
+</div>
+
+<h3 class="reveal">Docker Compose</h3>
+<p class="reveal">
+  Two services: TimescaleDB (PostgreSQL 16 with time-series extensions) and Grafana for
+  visualization. The SQL init scripts are mounted into the container's <code>initdb.d</code>
+  directory and execute automatically on first boot. A health check ensures the database is
+  ready before Grafana connects.
+</p>
+
+<h3 class="reveal">The Gymnasium Environment</h3>
+<p class="reveal">
+  <code>SnowdenReplayEnv</code> replays historical predictions through a standard Gymnasium
+  interface for parameter sweeps. It's <em>not</em> RL training; it's a
+  backtesting harness for finding the optimal Kelly divisor (2, 4, 6, or 8) and bet
+  threshold (5%, 10%, or 20% of bankroll) against resolved outcomes.
+</p>
+
+<div class="cb reveal">
+<div class="cb-head"><span class="cb-file">snowden/env.py</span><button class="cb-copy" onclick="copyCode(this)">Copy</button></div>
+<pre><code><span class="k">class</span> <span class="t">SnowdenReplayEnv</span>(<span class="t">gym.Env</span>):
+    <span class="k">def</span> <span class="f">__init__</span>(<span class="p">self</span>, <span class="p">predictions</span>: <span class="t">pl.DataFrame</span>, <span class="p">initial_bankroll</span>=<span class="n">2000.0</span>):
+        <span class="c"># Obs: [p_est, p_market, edge, confidence, spread, days_to_resolve]</span>
+        <span class="p">self</span>.observation_space = spaces.Box(-<span class="n">1</span>, <span class="n">365</span>, shape=(<span class="n">6</span>,), dtype=np.float32)
+        <span class="c"># Action: [skip, small 5%, medium 10%, large 20%]</span>
+        <span class="p">self</span>.action_space = spaces.Discrete(<span class="n">4</span>)
+
+    <span class="k">def</span> <span class="f">step</span>(<span class="p">self</span>, <span class="p">action</span>):
+        size_map = {<span class="n">0</span>: <span class="n">0.0</span>, <span class="n">1</span>: <span class="n">0.05</span>, <span class="n">2</span>: <span class="n">0.10</span>, <span class="n">3</span>: <span class="n">0.20</span>}
+        bet = size_map[action] * <span class="p">self</span>._bankroll
+        <span class="c"># PnL computed from resolved outcome + market price</span>
+        <span class="p">self</span>._bankroll += pnl
+        <span class="p">self</span>._peak = <span class="f">max</span>(<span class="p">self</span>._peak, <span class="p">self</span>._bankroll)
+        <span class="k">return</span> obs, pnl, done, <span class="t">False</span>, {<span class="s">"bankroll"</span>: ..., <span class="s">"drawdown"</span>: ...}</code></pre>
+</div>
+</section>
+<div class="sep"></div>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     CHAPTER 9
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="ch" id="ch9">
+<div class="ch-tag reveal">Chapter 9</div>
+<h2 class="reveal">The Full Journey</h2>
+
+<p class="reveal">
+  Every 15 minutes, the Chief orchestrator wakes up and runs a complete trading cycle.
+  Here is the journey of a single cycle, from wake-up to portfolio snapshot.
+</p>
+
+<ol class="steps reveal stagger-children">
+  <li class="step reveal"><span class="step-n">1</span><span class="step-t"><strong>Chief wakes up.</strong> Reloads portfolio state from TimescaleDB: open positions, current bankroll, daily P&amp;L. Checks the kill switch: if daily drawdown exceeds 10%, the cycle is aborted and all trading is frozen.</span></li>
+  <li class="step reveal"><span class="step-n">2</span><span class="step-t"><strong>Scanner runs stages 1&ndash;5.</strong> Fetches 500+ markets, filters through liquidity gate, efficiency scoring, strategy matching, and Haiku triage. ~2&ndash;3 seconds total. Funnel metrics (stage counts and duration) are logged to <code>scanner_metrics</code>.</span></li>
+  <li class="step reveal"><span class="step-n">3</span><span class="step-t"><strong>Price history enrichment.</strong> For each approved candidate, the system fetches 7-day price history from the CLOB timeseries API. This gives the Analyst context on recent price movement and volatility.</span></li>
+  <li class="step reveal"><span class="step-n">4</span><span class="step-t"><strong>Analyst calls Claude Opus</strong> for each candidate. Calls are sequential to respect rate limits. Each call fetches category-specific news, builds a detailed prompt, and returns a calibrated probability estimate. ~30 seconds for 10&ndash;15 markets.</span></li>
+  <li class="step reveal"><span class="step-n">5</span><span class="step-t"><strong>Kelly sizes each signal.</strong> For each analysis with sufficient confidence, <code>build_signal()</code> computes the confidence-weighted edge, checks the 5% threshold, and calculates the quarter-Kelly position size in USD.</span></li>
+  <li class="step reveal"><span class="step-n">6</span><span class="step-t"><strong>Sentinel checks risk limits.</strong> Each signal passes through four sequential checks: single position size, portfolio heat, daily drawdown, and correlated category exposure. Any failure vetoes the signal.</span></li>
+  <li class="step reveal"><span class="step-n">7</span><span class="step-t"><strong>Trader executes approved trades.</strong> Fetches the order book, runs the slippage guard (abort if price moved >3%), and places a limit order through the live or paper client. Every execution is logged.</span></li>
+  <li class="step reveal"><span class="step-n">8</span><span class="step-t"><strong>Portfolio snapshot.</strong> The Chief computes total equity (cash + mark-to-market position value), updates heat and P&amp;L, and writes a <code>portfolio_snapshots</code> row. Grafana picks it up in real time.</span></li>
+</ol>
+
+<h3 class="reveal">The Orchestrator</h3>
+
+<div class="cb reveal">
+<div class="cb-head"><span class="cb-file">snowden/agents/chief.py, run_cycle()</span><button class="cb-copy" onclick="copyCode(this)">Copy</button></div>
+<pre><code><span class="k">async def</span> <span class="f">run_cycle</span>(<span class="p">self</span>, <span class="p">cycle_number</span>: <span class="t">int</span>) -> <span class="t">None</span>:
+    <span class="p">self</span>._portfolio.cycle_number = cycle_number
+
+    <span class="c"># Reload positions from DB</span>
+    positions_df = <span class="k">await</span> <span class="p">self</span>._store.get_active_positions()
+    <span class="p">self</span>._portfolio.positions = <span class="p">self</span>._build_positions(positions_df)
+
+    <span class="c"># Kill switch check</span>
+    <span class="k">if</span> check_kill_switch(<span class="p">self</span>._portfolio):
+        log.critical(<span class="s">"FROZEN"</span>, reason=<span class="s">"kill_switch_active"</span>)
+        <span class="k">return</span>
+
+    <span class="c"># Scan stages 1-5</span>
+    approved, stage_counts, scan_ms = <span class="k">await</span> <span class="p">self</span>._scan()
+    <span class="k">await</span> <span class="p">self</span>._store.log_scan_metrics(stage_counts, scan_ms)
+
+    <span class="k">if not</span> approved:
+        log.info(<span class="s">"no_opportunities"</span>); <span class="k">return</span>
+
+    <span class="c"># Enrich with price history, then analyze with Opus</span>
+    analyses = <span class="k">await</span> analyze_batch(approved, <span class="p">self</span>._calibrator)
+
+    <span class="c"># Build signals → Sentinel risk check → Trader execution</span>
+    <span class="k">for</span> analysis <span class="k">in</span> analyses:
+        <span class="k">if</span> analysis.confidence < settings.min_confidence: <span class="k">continue</span>
+        signal = build_signal(
+            market_id=analysis.market_id,
+            p_est=analysis.p_est, p_market=analysis.p_market,
+            confidence=analysis.confidence,
+            bankroll=<span class="p">self</span>._portfolio.bankroll,
+            ...
+        )
+        <span class="k">if</span> signal <span class="k">is</span> <span class="t">None</span>: <span class="k">continue</span>
+
+        risk = check_signal(signal, <span class="p">self</span>._portfolio)
+        <span class="k">if not</span> risk.approved: <span class="k">continue</span>
+
+        result = <span class="k">await</span> execute_signal(signal, <span class="p">self</span>._client, <span class="p">self</span>._store)
+        <span class="k">if</span> result.status <span class="k">in</span> (<span class="s">"FILLED"</span>, <span class="s">"PAPER"</span>):
+            <span class="p">self</span>._portfolio.bankroll -= signal.size_usd
+            <span class="p">self</span>._portfolio.heat = risk.heat
+
+    <span class="c"># Snapshot portfolio state to TimescaleDB</span>
+    <span class="k">await</span> <span class="p">self</span>._store.log_portfolio_snapshot(<span class="p">self</span>._portfolio)
+    log.info(<span class="s">"cycle_complete"</span>, cycle=cycle_number,
+             bankroll=<span class="f">round</span>(<span class="p">self</span>._portfolio.bankroll, <span class="n">2</span>))</code></pre>
+</div>
+
+<div class="callout reveal">
+<div class="callout-tag">Final Note</div>
+<p>
+  The system is designed for one thing: disciplined, systematic edge extraction from
+  prediction markets. No heroics, no overrides, no FOMO. Scan, analyze, size, check,
+  execute, log. Every 15 minutes. The thesis isn't that the LLM is always right. It's
+  that over hundreds of bets, a calibrated probability estimator with conservative sizing and
+  strict risk limits has positive expected value. Let the math do the work.
+</p>
+</div>
+
+<div class="sep"></div>
+
+<p class="footer-note reveal">
+  Built with Python 3.12 &middot; Polars &middot; Claude Opus 4.6 &middot; TimescaleDB &middot; asyncpg &middot; httpx<br>
+  Designed for the <span>Polymarket CLOB</span> on Polygon
+</p>
+
+</div><!-- /.wrap -->
+</main>
+
+<!-- ════════════════════════════════════════════════════════════════
+     JAVASCRIPT
+     ════════════════════════════════════════════════════════════════ -->
+<script>
+// Theme toggle
+function toggleTheme(){
+  const h=document.documentElement;
+  const next=h.getAttribute('data-theme')==='dark'?'light':'dark';
+  h.setAttribute('data-theme',next);
+  document.getElementById('themeIcon').innerHTML=next==='dark'?'&#9788;':'&#9789;';
+  try{localStorage.setItem('snowden-theme',next)}catch(e){}
+}
+try{
+  const s=localStorage.getItem('snowden-theme');
+  if(s==='light'){
+    document.documentElement.setAttribute('data-theme','light');
+    document.addEventListener('DOMContentLoaded',()=>{document.getElementById('themeIcon').innerHTML='&#9789;'});
+  }
+}catch(e){}
+
+// Mobile sidebar
+function toggleSidebar(){
+  const sb=document.getElementById('sidebar');
+  const ov=document.getElementById('overlay');
+  const burger=document.getElementById('burger');
+  const open=sb.classList.toggle('open');
+  ov.classList.toggle('show',open);
+  burger.classList.toggle('open',open);
+  document.body.style.overflow=open?'hidden':'';
+}
+document.addEventListener('DOMContentLoaded',()=>{
+  document.querySelectorAll('.toc a').forEach(a=>{
+    a.addEventListener('click',()=>{
+      if(window.innerWidth<=860){
+        const sb=document.getElementById('sidebar');
+        if(sb.classList.contains('open')) toggleSidebar();
+      }
+    });
+  });
+});
+
+// Copy code
+function copyCode(btn){
+  const code=btn.closest('.cb').querySelector('code');
+  navigator.clipboard.writeText(code.textContent).then(()=>{
+    btn.textContent='Copied!';btn.classList.add('ok');
+    setTimeout(()=>{btn.textContent='Copy';btn.classList.remove('ok')},1800);
+  });
+}
+
+// Scroll tracking + reveal animations
+document.addEventListener('DOMContentLoaded',()=>{
+  const chs=document.querySelectorAll('.ch');
+  const tocLinks=document.querySelectorAll('.toc a');
+  const navLinks=document.querySelectorAll('.nav-mid a');
+  const progFill=document.getElementById('progFill');
+  const progText=document.getElementById('progText');
+  const scrollProgress=document.getElementById('scrollProgress');
+  const mainNav=document.getElementById('mainNav');
+  const TOTAL=28;
+  let ticking=false;
+
+  // Intersection Observer for reveal animations
+  const revealObserver=new IntersectionObserver((entries)=>{
+    entries.forEach(entry=>{
+      if(entry.isIntersecting){
+        entry.target.classList.add('visible');
+      }
+    });
+  },{threshold:0.08,rootMargin:'0px 0px -40px 0px'});
+
+  document.querySelectorAll('.reveal').forEach(el=>revealObserver.observe(el));
+
+  function onScroll(){
+    if(ticking)return;
+    ticking=true;
+    requestAnimationFrame(()=>{
+      const st=window.scrollY;
+      const dh=document.documentElement.scrollHeight-window.innerHeight;
+      const pct=Math.min(st/dh,1);
+
+      // Progress bars
+      progFill.style.width=(pct*100)+'%';
+      scrollProgress.style.width=(pct*100)+'%';
+
+      const rem=Math.max(1,Math.round(TOTAL*(1-pct)));
+      progText.textContent=rem<=1?'~1 min remaining':'~'+rem+' min remaining';
+
+      // Nav shadow on scroll
+      mainNav.classList.toggle('scrolled',st>20);
+
+      // Active chapter tracking
+      let activeId='';
+      chs.forEach(c=>{if(c.getBoundingClientRect().top<=160)activeId=c.id});
+      tocLinks.forEach(l=>l.classList.toggle('active',l.getAttribute('data-ch')===activeId));
+      navLinks.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+activeId));
+      ticking=false;
+    });
+  }
+  window.addEventListener('scroll',onScroll,{passive:true});
+  onScroll();
+
+  // Escape key closes sidebar
+  document.addEventListener('keydown',e=>{
+    if(e.key==='Escape'){
+      const sb=document.getElementById('sidebar');
+      if(sb.classList.contains('open')) toggleSidebar();
+    }
+  });
+});
+</script>
+
+</body>
+</html>
