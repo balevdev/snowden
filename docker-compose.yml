@@ -9,15 +9,32 @@ services:
       POSTGRES_USER: snowden
       POSTGRES_PASSWORD: snowden_dev
       POSTGRES_DB: snowden
+    command:
+      - "postgres"
+      - "-c"
+      - "shared_buffers=1GB"
+      - "-c"
+      - "effective_cache_size=2GB"
     volumes:
       - tsdb_data:/var/lib/postgresql/data
       - ./infra/init.sql:/docker-entrypoint-initdb.d/01-init.sql
       - ./infra/continuous_aggs.sql:/docker-entrypoint-initdb.d/02-aggs.sql
+      - ./infra/migrations/001_observability.sql:/docker-entrypoint-initdb.d/03-observability.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U snowden"]
       interval: 10s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: "1.5"
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
 
   grafana:
     image: grafana/grafana:latest
@@ -28,8 +45,46 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
       - ./infra/grafana/datasource.yml:/etc/grafana/provisioning/datasources/ds.yml
+      - ./infra/grafana/provisioning/dashboards/dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards
     depends_on:
       - timescaledb
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  snowden:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8080:8080"
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8080/')\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "1.5"
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
 
 volumes:
   tsdb_data:

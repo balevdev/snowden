@@ -18,6 +18,7 @@ from snowden.types import EventAnalysis, Regime, ScanResult, Strategy
 
 if TYPE_CHECKING:
     from snowden.calibrate import Calibrator
+    from snowden.store import Store
 
 log = structlog.get_logger()
 
@@ -112,6 +113,7 @@ async def analyze_market(
     scan: ScanResult,
     calibrator: Calibrator,
     client: anthropic.AsyncAnthropic | None = None,
+    store: Store | None = None,
 ) -> EventAnalysis | None:
     """Run Analyst on a single market. Returns calibrated EventAnalysis."""
     if client is None:
@@ -164,19 +166,22 @@ async def analyze_market(
 
     except Exception as e:
         log.error("analyst_error", market_id=scan.market.market_id, error=str(e))
+        if store:
+            await store.log_error("analyst", type(e).__name__, str(e))
         return None
 
 
 async def analyze_batch(
     scans: list[ScanResult],
     calibrator: Calibrator,
+    store: Store | None = None,
 ) -> list[EventAnalysis]:
     """Analyze multiple markets. Sequential to respect rate limits."""
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
     results: list[EventAnalysis] = []
 
     for scan in scans:
-        analysis = await analyze_market(scan, calibrator, client)
+        analysis = await analyze_market(scan, calibrator, client, store=store)
         if analysis is not None:
             results.append(analysis)
             log.info(

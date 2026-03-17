@@ -6,17 +6,21 @@ Uses httpx for async HTTP, Polars for DataFrame returns.
 """
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 import httpx
 import polars as pl
+import structlog
 
 from snowden.config import settings
 from snowden.types import OrderResult, TradeSignal
 
 if TYPE_CHECKING:
     from snowden.store import Store
+
+log = structlog.get_logger()
 
 _CATEGORY_KEYWORDS: dict[str, list[str]] = {
     "politics_us": ["president", "election", "congress", "senate", "trump", "biden",
@@ -55,6 +59,22 @@ class LiveClient:
             base_url=settings.poly_data_host,
             timeout=15.0,
         )
+        self._sem = asyncio.Semaphore(settings.poly_max_concurrent)
+        self._clob_client: Any | None = None
+        if settings.poly_api_key and settings.poly_private_key:
+            from py_clob_client.client import ClobClient
+            self._clob_client = ClobClient(
+                settings.poly_clob_host,
+                key=settings.poly_api_key,
+                chain_id=137,
+                funder=settings.poly_funder,
+                private_key=settings.poly_private_key,
+                creds={
+                    "apiKey": settings.poly_api_key,
+                    "secret": settings.poly_api_secret,
+                    "passphrase": settings.poly_api_passphrase,
+                },
+            )
 
     async def get_active_markets(self) -> pl.DataFrame:
         """
@@ -146,14 +166,18 @@ class LiveClient:
 
     async def get_book(self, token_id: str) -> dict[str, Any]:
         """Fetch order book for a token."""
-        r = await self._clob.get("/book", params={"token_id": token_id})
+        async with self._sem:
+            await asyncio.sleep(settings.poly_request_delay)
+            r = await self._clob.get("/book", params={"token_id": token_id})
         r.raise_for_status()
         result: dict[str, Any] = r.json()
         return result
 
     async def get_midpoint(self, token_id: str) -> float:
         """Fetch current midpoint for a token."""
-        r = await self._clob.get("/midpoint", params={"token_id": token_id})
+        async with self._sem:
+            await asyncio.sleep(settings.poly_request_delay)
+            r = await self._clob.get("/midpoint", params={"token_id": token_id})
         r.raise_for_status()
         return float(r.json().get("mid", 0))
 
@@ -161,10 +185,12 @@ class LiveClient:
         """Fetch price history from CLOB timeseries."""
         end = int(datetime.now(UTC).timestamp())
         start = int((datetime.now(UTC) - timedelta(days=days)).timestamp())
-        r = await self._clob.get(
-            "/prices-history",
-            params={"market": token_id, "startTs": start, "endTs": end, "fidelity": 60},
-        )
+        async with self._sem:
+            await asyncio.sleep(settings.poly_request_delay)
+            r = await self._clob.get(
+                "/prices-history",
+                params={"market": token_id, "startTs": start, "endTs": end, "fidelity": 60},
+            )
         r.raise_for_status()
         data = r.json()
         if not data or "history" not in data:
@@ -173,28 +199,19 @@ class LiveClient:
 
     async def get_market_detail(self, market_id: str) -> dict[str, Any]:
         """Fetch detailed market info from Gamma."""
-        r = await self._gamma.get(f"/markets/{market_id}")
+        async with self._sem:
+            await asyncio.sleep(settings.poly_request_delay)
+            r = await self._gamma.get(f"/markets/{market_id}")
         r.raise_for_status()
         result: dict[str, Any] = r.json()
         return result
 
     async def execute(self, signal: TradeSignal) -> OrderResult:
         """Place a real order via py-clob-client."""
-        from py_clob_client.client import ClobClient
         from py_clob_client.order_builder.constants import BUY
 
-        client = ClobClient(
-            settings.poly_clob_host,
-            key=settings.poly_api_key,
-            chain_id=137,
-            funder=settings.poly_funder,
-            private_key=settings.poly_private_key,
-            creds={
-                "apiKey": settings.poly_api_key,
-                "secret": settings.poly_api_secret,
-                "passphrase": settings.poly_api_passphrase,
-            },
-        )
+        if not self._clob_client:
+            return OrderResult(status="REJECTED", ts=datetime.now(UTC))
 
         limit = signal.limit_price or signal.p_market
         order_args = {
@@ -205,8 +222,8 @@ class LiveClient:
         }
 
         try:
-            signed = client.create_and_sign_order(order_args)
-            resp = client.post_order(signed)
+            signed = self._clob_client.create_and_sign_order(order_args)
+            resp = self._clob_client.post_order(signed)
             return OrderResult(
                 status="FILLED" if resp.get("success") else "CANCELLED",
                 order_id=resp.get("orderID"),
@@ -260,3 +277,23 @@ class SimClient:
 
     async def close(self) -> None:
         await self._live.close()
+
+
+class DryRunClient(LiveClient):
+    """Dry-run client. All reads are real, execute() only logs."""
+
+    async def execute(self, signal: TradeSignal) -> OrderResult:
+        log.info(
+            "dry_run_execute",
+            market_id=signal.market_id,
+            direction=signal.direction,
+            size_usd=signal.size_usd,
+            price=signal.p_market,
+        )
+        return OrderResult(
+            status="PAPER",
+            fill_price=signal.p_market,
+            fill_size=signal.size_usd,
+            slippage=0.0,
+            ts=datetime.now(UTC),
+        )

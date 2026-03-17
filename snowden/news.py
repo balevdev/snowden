@@ -7,6 +7,7 @@ Returns structured context for the Analyst prompt.
 """
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
@@ -73,30 +74,38 @@ async def fetch_news_for_market(
     items: list[NewsItem] = []
     cutoff = datetime.now(UTC) - timedelta(hours=max_age_hours)
 
-    for url in feed_urls:
-        try:
-            feed = feedparser.parse(url)
-            for entry in feed.entries[:20]:
-                published = None
-                if hasattr(entry, "published_parsed") and entry.published_parsed:
-                    t = entry.published_parsed
-                    published = datetime(
-                        t[0], t[1], t[2], t[3], t[4], t[5], tzinfo=UTC,
-                    )
-                    if published < cutoff:
-                        continue
+    sem = asyncio.Semaphore(10)
 
-                items.append(
-                    NewsItem(
-                        title=entry.get("title", ""),
-                        source=feed.feed.get("title", url),
-                        published=published,
-                        url=entry.get("link", ""),
-                        summary=entry.get("summary", "")[:200],
-                    )
+    async def _fetch_one(url: str) -> list[NewsItem]:
+        async with sem:
+            feed = await asyncio.to_thread(feedparser.parse, url)
+        result: list[NewsItem] = []
+        for entry in feed.entries[:20]:
+            published = None
+            if hasattr(entry, "published_parsed") and entry.published_parsed:
+                t = entry.published_parsed
+                published = datetime(
+                    t[0], t[1], t[2], t[3], t[4], t[5], tzinfo=UTC,
                 )
-        except Exception:
-            continue  # Feed failures are non-fatal
+                if published < cutoff:
+                    continue
+            result.append(
+                NewsItem(
+                    title=entry.get("title", ""),
+                    source=feed.feed.get("title", url),
+                    published=published,
+                    url=entry.get("link", ""),
+                    summary=entry.get("summary", "")[:200],
+                )
+            )
+        return result
+
+    results = await asyncio.gather(
+        *[_fetch_one(u) for u in feed_urls], return_exceptions=True
+    )
+    for r in results:
+        if isinstance(r, list):
+            items.extend(r)
 
     # Sort by recency, deduplicate by title similarity
     items.sort(key=lambda x: x.published or cutoff, reverse=True)

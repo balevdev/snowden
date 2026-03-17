@@ -81,6 +81,12 @@ class Settings(BaseSettings):
 
     # Chief
     min_confidence: float = 0.3
+    max_position_hold_hours: float = 720.0
+    stop_loss_pct: float = 0.30
+
+    # Rate limiting
+    poly_max_concurrent: int = 5
+    poly_request_delay: float = 0.1
 
     # Discord
     discord_webhook_url: str = ""

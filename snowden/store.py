@@ -20,6 +20,7 @@ if TYPE_CHECKING:
         MarketSnapshot,
         OrderResult,
         PortfolioState,
+        Position,
         TradeSignal,
     )
 
@@ -122,23 +123,6 @@ class Store:
             state.cycle_number,
         )
 
-    async def log_scan_metrics(
-        self, stage_counts: dict[str, int], duration_ms: float
-    ) -> None:
-        pool = self._ensure_pool()
-        await pool.execute(
-            """INSERT INTO scanner_metrics
-               (ts, stage_1, stage_2, stage_3, stage_4, stage_5, duration_ms)
-               VALUES ($1,$2,$3,$4,$5,$6,$7)""",
-            datetime.now(UTC),
-            stage_counts.get("stage_1", 0),
-            stage_counts.get("stage_2", 0),
-            stage_counts.get("stage_3", 0),
-            stage_counts.get("stage_4", 0),
-            stage_counts.get("stage_5", 0),
-            duration_ms,
-        )
-
     async def get_resolved_predictions(self) -> pl.DataFrame:
         pool = self._ensure_pool()
         rows = await pool.fetch(
@@ -175,6 +159,7 @@ class Store:
                       t.strategy, t.ts as opened_at
                FROM trades t
                WHERE t.status IN ('FILLED', 'PAPER')
+               AND t.side = 'BUY'
                AND NOT EXISTS (
                    SELECT 1 FROM trades t2
                    WHERE t2.market_id = t.market_id
@@ -192,4 +177,113 @@ class Store:
             "UPDATE predictions SET resolved = true, outcome = $1 WHERE market_id = $2",
             outcome,
             market_id,
+        )
+
+    async def log_ticks_batch(self, rows: list[dict]) -> None:
+        """Batch-insert market tick rows."""
+        if not rows:
+            return
+        pool = self._ensure_pool()
+        await pool.executemany(
+            """INSERT INTO market_ticks
+               (ts, token_id, market_id, mid, spread, vol_24h, bid_depth, ask_depth)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8)""",
+            [
+                (
+                    r["ts"], r["token_id"], r["market_id"],
+                    r["mid"], r["spread"], r["vol_24h"],
+                    r["bid_depth"], r["ask_depth"],
+                )
+                for r in rows
+            ],
+        )
+
+    async def log_close_trade(
+        self,
+        position: Position,
+        reason: str,
+        exit_price: float,
+    ) -> None:
+        """Record a SELL trade to close a position."""
+        pool = self._ensure_pool()
+        await pool.execute(
+            """INSERT INTO trades
+               (ts, market_id, token_id, side, direction, size, price,
+                order_id, status, strategy, paper, kelly_frac, edge)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)""",
+            datetime.now(UTC),
+            position.market_id,
+            position.token_id,
+            "SELL",
+            position.direction,
+            position.size_usd,
+            exit_price,
+            None,
+            "PAPER" if settings.is_paper else "FILLED",
+            position.strategy.value,
+            settings.is_paper,
+            0.0,
+            0.0,
+        )
+
+    async def get_last_snapshot(self) -> dict | None:
+        """Get most recent portfolio snapshot for HWM restoration."""
+        pool = self._ensure_pool()
+        row = await pool.fetchrow(
+            "SELECT * FROM portfolio_snapshots ORDER BY ts DESC LIMIT 1"
+        )
+        return dict(row) if row else None
+
+    async def get_unresolved_market_ids(self) -> list[str]:
+        """Get distinct market IDs with unresolved predictions."""
+        pool = self._ensure_pool()
+        rows = await pool.fetch(
+            "SELECT DISTINCT market_id FROM predictions WHERE resolved = false"
+        )
+        return [row["market_id"] for row in rows]
+
+    async def log_scan_metrics_extended(
+        self,
+        stage_counts: dict[str, int],
+        duration_ms: float,
+        stage_durations: dict[str, float] | None = None,
+        cycle_success: bool | None = None,
+        cycle_error: str | None = None,
+        cycle_duration_ms: float | None = None,
+    ) -> None:
+        """Extended scan metrics with per-stage timing and cycle outcome."""
+        pool = self._ensure_pool()
+        sd = stage_durations or {}
+        await pool.execute(
+            """INSERT INTO scanner_metrics
+               (ts, stage_1, stage_2, stage_3, stage_4, stage_5, duration_ms,
+                s1_ms, s2_ms, s3_ms, s4_ms, s5_ms,
+                cycle_success, cycle_error, cycle_duration_ms)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)""",
+            datetime.now(UTC),
+            stage_counts.get("stage_1", 0),
+            stage_counts.get("stage_2", 0),
+            stage_counts.get("stage_3", 0),
+            stage_counts.get("stage_4", 0),
+            stage_counts.get("stage_5", 0),
+            duration_ms,
+            sd.get("s1_ms"),
+            sd.get("s2_ms"),
+            sd.get("s3_ms"),
+            sd.get("s4_ms"),
+            sd.get("s5_ms"),
+            cycle_success,
+            cycle_error,
+            cycle_duration_ms,
+        )
+
+    async def log_error(self, source: str, error_type: str, message: str) -> None:
+        """Log an error to the error_log table."""
+        pool = self._ensure_pool()
+        await pool.execute(
+            "INSERT INTO error_log (ts, source, error_type, message) VALUES ($1,$2,$3,$4)",
+            datetime.now(UTC),
+            source,
+            error_type,
+            message,
         )
