@@ -169,7 +169,10 @@ class Chief:
                     to_close.append((pos, "resolved", outcome_price))
                     continue
             except Exception as e:
-                log.warning("exit_check_market_detail_failed", market_id=pos.market_id, error=str(e))
+                log.warning(
+                    "exit_check_market_detail_failed",
+                    market_id=pos.market_id, error=str(e),
+                )
                 await self._store.log_error("chief", "exit_check", str(e))
 
             # Stop-loss

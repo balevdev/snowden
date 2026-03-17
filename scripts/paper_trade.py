@@ -1,5 +1,6 @@
 """Run paper trading loop without OpenClaw."""
 import asyncio
+import contextlib
 import signal
 
 import structlog
@@ -53,12 +54,10 @@ async def main() -> None:
                 await chief.run_cycle(cycle)
             except Exception:
                 log.exception("cycle_failed", cycle=cycle)
-            try:
+            with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(
                     shutdown_event.wait(), timeout=settings.cycle_interval
                 )
-            except asyncio.TimeoutError:
-                pass
     finally:
         log.info("shutting_down", cycles_completed=cycle)
         await send_alert(f"Snowden stopped after {cycle} cycles")

@@ -34,13 +34,14 @@ async def _handle_connection(
             "cycle_number": chief.cycle_number,
             "ts": datetime.now(UTC).isoformat(),
         })
+        body_bytes = body.encode()
         response = (
             f"HTTP/1.1 200 OK\r\n"
             f"Content-Type: application/json\r\n"
-            f"Content-Length: {len(body)}\r\n"
-            f"\r\n{body}"
+            f"Content-Length: {len(body_bytes)}\r\n"
+            f"\r\n"
         )
-        writer.write(response.encode())
+        writer.write(response.encode() + body_bytes)
         await writer.drain()
     except Exception:
         pass

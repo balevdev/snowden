@@ -25,6 +25,7 @@ class SnowdenReplayEnv(gym.Env):  # type: ignore[type-arg]
         self,
         predictions: pl.DataFrame,
         initial_bankroll: float = 2000.0,
+        kelly_divisor: float = 4.0,
     ) -> None:
         super().__init__()
         self._preds = predictions.sort("ts")
@@ -32,6 +33,7 @@ class SnowdenReplayEnv(gym.Env):  # type: ignore[type-arg]
         self._bankroll = initial_bankroll
         self._initial = initial_bankroll
         self._peak = initial_bankroll
+        self._kelly_divisor = kelly_divisor
 
         # Obs: [p_est, p_market, edge, confidence, spread, days_to_resolve]
         self.observation_space = spaces.Box(-1, 365, shape=(6,), dtype=np.float32)
@@ -53,8 +55,8 @@ class SnowdenReplayEnv(gym.Env):  # type: ignore[type-arg]
         self, action: int
     ) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:
         row = self._preds.row(self._idx, named=True)
-        size_map = {0: 0.0, 1: 0.05, 2: 0.10, 3: 0.20}
-        frac = size_map[action]
+        base_sizes = {0: 0.0, 1: 0.05, 2: 0.10, 3: 0.20}
+        frac = base_sizes[action] * (4.0 / self._kelly_divisor)
         bet = frac * self._bankroll
 
         pnl = 0.0

@@ -102,7 +102,7 @@ class Settings(BaseSettings):
 
     @property
     def is_paper(self) -> bool:
-        return self.mode == "paper"
+        return self.mode != "live"
 
 
 settings = Settings()

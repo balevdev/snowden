@@ -18,7 +18,7 @@ async def main() -> None:
 
     for divisor in [2, 4, 6, 8]:
         for threshold_action in [1, 2, 3]:
-            env = SnowdenReplayEnv(resolved, initial_bankroll=2000.0)
+            env = SnowdenReplayEnv(resolved, initial_bankroll=2000.0, kelly_divisor=divisor)
             obs, _ = env.reset()
             total_pnl = 0.0
             max_dd = 0.0

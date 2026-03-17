@@ -128,6 +128,8 @@ class LiveClient:
                     outcome_prices = market.get("outcomePrices", "0.5,0.5")
                     if isinstance(outcome_prices, str):
                         mid = float(outcome_prices.split(",")[0])
+                    elif isinstance(outcome_prices, list) and outcome_prices:
+                        mid = float(outcome_prices[0])
                     else:
                         mid = 0.5
 
